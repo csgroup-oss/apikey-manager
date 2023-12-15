@@ -3,7 +3,7 @@ imagePullSecrets:
 
 config:
   allowed_origin_regex: .*(geostorm\.eu\|csgroup\.space)
-  api_keys_db_url: "postgresql://tech_apitoken:#w^HQ6kGki!7dYugDY@p2.csgroup.space:19432/secrets"
+  api_keys_db_url: "postgresql://xxxxx:yyyyyyy@p2.csgroup.space:19432/secrets"
   oidc_metadata_url: https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration
 
 ingress:

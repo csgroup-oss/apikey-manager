@@ -1,0 +1,8 @@
+include *.yaml
+include pytest.ini
+recursive-include app *.py
+recursive-include deploy *.helmignore
+recursive-include deploy *.tpl
+recursive-include deploy *.txt
+recursive-include deploy *.yaml
+recursive-include test *.py

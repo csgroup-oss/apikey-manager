@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "apikeymanager.fullname" . }}
+  labels:
+    {{- include "apikeymanager.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "apikeymanager.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "apikeymanager.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:          
+            - name: "CONFIG_FILE"
+              value: {{  .Values.config.config_file }}
+            - name: "API_PREFIX"
+              value: {{  .Values.config.api_prefix }}
+            - name: "DEBUG"
+              value: {{  .Values.config.debug | quote }}
+            - name: "API_KEYS_EXPIRE_IN_DAYS"
+              value: {{  .Values.config.api_keys_expire_in_days | quote }}
+            - name: "API_KEYS_SHOW_ENDPOINTS"
+              value: {{  .Values.config.api_keys_show_endpoints | quote }}
+            - name: "ALLOWED_ORIGIN_REGEX"
+              valueFrom:
+                secretKeyRef:
+                  key:  allowed_origin_regex
+                  name: {{ .Release.Name }}-auth
+            - name: "API_KEYS_DB_URL"
+              valueFrom:
+                secretKeyRef:
+                  key:  api_keys_db_url
+                  name: {{ .Release.Name }}-auth
+            - name: "OAUTH2_METADATA_URL"
+              valueFrom:
+                secretKeyRef:
+                  key:  oidc_metadata_url
+                  name: {{ .Release.Name }}-auth
+          {{- range $key, $val := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

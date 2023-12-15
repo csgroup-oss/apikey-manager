@@ -1,0 +1,11 @@
+venv
+*.pyc
+template
+save
+.vscode
+dist
+*.egg-info
+*cache*
+report.xml
+*.db
+build

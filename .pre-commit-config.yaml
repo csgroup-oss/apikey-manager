@@ -1,0 +1,70 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-yaml
+      - id: debug-statements
+      - id: forbid-new-submodules
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+      - id: name-tests-test
+      - id: pretty-format-json
+  # -  repo: https://github.com/mgedmin/check-manifest
+  #    rev: "0.49"
+  #    hooks:
+  #        - id: check-manifest
+  #          args: [--no-build-isolation]
+  #          additional_dependencies: [setuptools-scm]
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        args: [--config=pyproject.toml]
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.0.1
+    hooks:
+      - id: prettier
+        files: \.(js|ts|jsx|tsx|css|less|html|json|markdown|md|yaml|yml)$
+  - repo: https://github.com/hadialqattan/pycln
+    rev: v2.2.1
+    hooks:
+      - id: pycln
+        args: [--config=pyproject.toml]
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        files: "\\.(py)$"
+        args: [--settings-path=pyproject.toml]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.4.1
+    hooks:
+      - id: mypy
+        args: ["--ignore-missing-imports"]
+        additional_dependencies: [types-PyYAML, types-requests]
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: package.lock.json
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.10.1
+    hooks:
+      - id: pyupgrade
+        args: [--py310-plus]
+  - repo: https://github.com/pycqa/flake8
+    rev: "6.1.0"
+    hooks:
+      - id: flake8
+        additional_dependencies: ["flake8-bugbear", "flake8-print"]
+exclude: |
+  (?x)^(
+      deploy/.*|
+      tests/.*
+  )$

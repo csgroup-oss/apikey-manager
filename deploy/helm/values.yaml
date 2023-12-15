@@ -1,0 +1,23 @@
+imagePullSecrets:
+  - name: regcred
+
+config:
+  allowed_origin_regex: .*(geostorm\.eu\|csgroup\.space)
+  api_keys_db_url: "postgresql://tech_apitoken:#w^HQ6kGki!7dYugDY@p2.csgroup.space:19432/secrets"
+  oidc_metadata_url: https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: apikey.p2.csgroup.space
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: apikeymanager-tls
+      hosts:
+        - apikey.p2.csgroup.space

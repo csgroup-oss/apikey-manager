@@ -18,7 +18,8 @@ dependencies = [
     "python-jose",
     "SQLAlchemy",
     "psycopg2_binary",
-    "pydantic_settings"
+    "pydantic_settings",
+    "aiohttp",
 ]
 dynamic = ["version"]
 

@@ -25,6 +25,11 @@ LOGGER = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/status", response_model=str, name="check user health microservice")
+@router.get(
+    "/status",
+    response_model=str,
+    name="check user health microservice",
+    include_in_schema=False,
+)
 async def status_check(request: Request) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_200_OK, content={"healthy": True})

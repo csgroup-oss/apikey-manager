@@ -20,6 +20,7 @@ dependencies = [
     "psycopg2_binary",
     "pydantic_settings",
     "aiohttp",
+    "slowapi",
 ]
 dynamic = ["version"]
 

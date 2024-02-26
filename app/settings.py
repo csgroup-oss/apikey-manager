@@ -17,6 +17,8 @@
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 
 class ApiSettings(BaseSettings):
@@ -46,3 +48,8 @@ class ApiSettings(BaseSettings):
     def parse_root_path(cls, v):
         """Parse root path"""
         return v.rstrip("/")
+
+
+# Add a rate limiter to avoid cracking the api keys by brute force.
+# See: https://slowapi.readthedocs.io/en/latest/#fastapi
+rate_limiter = Limiter(key_func=get_remote_address)

@@ -22,13 +22,14 @@ import os
 from datetime import datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security
 from fastapi.security import APIKeyHeader, APIKeyQuery, OpenIdConnect
 from jose import jwt
 from jose.exceptions import JOSEError
 from pydantic import BaseModel
 from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
 
+from ..settings import rate_limiter
 from ..utils.asyncget import SingletonAiohttp
 from ._apikey_crud import apikey_crud
 
@@ -119,7 +120,7 @@ async def show_me(oidc_info: Annotated[dict, Depends(oidc_auth)]):
 
 
 @router.get("/api_key/new", include_in_schema=API_KEYS_SHOW_ENDPOINTS)
-def get_new_api_key(
+async def get_new_api_key(
     oidc_info: Annotated[dict, Depends(oidc_auth)],
     name: Annotated[
         str,
@@ -165,7 +166,7 @@ def get_new_api_key(
     dependencies=[Depends(oidc_auth)],
     include_in_schema=API_KEYS_SHOW_ENDPOINTS,
 )
-def revoke_api_key(
+async def revoke_api_key(
     api_key: Annotated[
         str, Query(..., alias="api-key", description="the api_key to revoke")
     ]
@@ -182,7 +183,7 @@ def revoke_api_key(
     dependencies=[Depends(oidc_auth)],
     include_in_schema=API_KEYS_SHOW_ENDPOINTS,
 )
-def renew_api_key(
+async def renew_api_key(
     api_key: Annotated[
         str, Query(..., alias="api-key", description="the API key to renew")
     ],
@@ -219,7 +220,7 @@ class UsageLog(BaseModel):
     include_in_schema=API_KEYS_SHOW_ENDPOINTS,
     response_model_exclude_none=True,
 )
-def get_api_key_usage_logs(
+async def get_api_key_usage_logs(
     oidc_info: Annotated[dict, Depends(oidc_auth)]
 ) -> list[UsageLog]:
     """
@@ -250,12 +251,16 @@ class CheckKey(BaseModel):
 
 
 @router.get("/api_key/check", response_model=CheckKey)
-def check_api_key(api_key_info: Annotated[dict, Depends(api_key_security)]):
+@rate_limiter.limit("20/minute")
+async def check_api_key(
+    request: Request,  # needed by the rate limiter
+    query_param: Annotated[str, Security(api_key_query)],
+    header_param: Annotated[str, Security(api_key_header)],
+):
     """
     HTTP GET endpoint to check the apikey validity in the database.
     \f
     Todo:
         * Synchronize database with keycloak.
-        * Encrypt the apikey param value ? Or only accept param in header ?
     """
-    return api_key_info
+    return await api_key_security(query_param, header_param)

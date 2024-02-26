@@ -22,9 +22,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.logger import logger
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from .controllers import auth_router, health_router, test_router
-from .settings import ApiSettings
+from .settings import ApiSettings, rate_limiter
 from .utils.asyncget import SingletonAiohttp
 
 fastAPI_logger = logger  # convenient name
@@ -114,6 +116,10 @@ def get_application() -> FastAPI:
         allow_methods=api_settings.cors_allow_methods,
         allow_headers=["*"],
     )
+
+    # Set and configure rate limiter
+    application.state.limiter = rate_limiter
+    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     application.include_router(health_router, prefix="/health", tags=["health"])
     application.include_router(auth_router, prefix="/auth", tags=["_auth"])

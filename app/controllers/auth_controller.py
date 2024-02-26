@@ -242,3 +242,20 @@ def get_api_key_usage_logs(
         )
         for row in apikey_crud.get_usage_stats(oidc_info["preferred_username"])
     ]
+
+
+class CheckKey(BaseModel):
+    iam_roles: dict | None
+    config: dict | None
+
+
+@router.get("/api_key/check", response_model=CheckKey)
+def check_api_key(api_key_info: Annotated[dict, Depends(api_key_security)]):
+    """
+    HTTP GET endpoint to check the apikey validity in the database.
+    \f
+    Todo:
+        * Synchronize database with keycloak.
+        * Encrypt the apikey param value ? Or only accept param in header ?
+    """
+    return api_key_info

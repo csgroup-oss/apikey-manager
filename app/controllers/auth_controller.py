@@ -22,8 +22,10 @@ import os
 from datetime import datetime, timedelta
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Security
-from fastapi.security import APIKeyHeader, APIKeyQuery, OpenIdConnect
+from fastapi.openapi.models import OAuthFlowAuthorizationCode
+from fastapi.security import APIKeyHeader, APIKeyQuery, OAuth2
 from jose import jwt
 from jose.exceptions import JOSEError
 from pydantic import BaseModel
@@ -42,7 +44,6 @@ OAUTH2_METADATA_URL = os.environ.get(
     "https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration",
 )
 
-
 #
 # TODO
 # - manage referer
@@ -53,15 +54,38 @@ OAUTH2_METADATA_URL = os.environ.get(
 
 router = APIRouter()
 
-oidc = OpenIdConnect(openIdConnectUrl=OAUTH2_METADATA_URL)
+# Get endpoints for oauth2 authentication.
+# TODO: if this fails, we catch the error and the lock icons in swagger won't work.
+# Do we want to propagate the error instead ?
+try:
+    authorization_endpoint = (
+        httpx.get(OAUTH2_METADATA_URL).json().get("authorization_endpoint")
+    )
+except Exception:
+    authorization_endpoint = ""
+try:
+    token_endpoint = httpx.get(OAUTH2_METADATA_URL).json().get("token_endpoint")
+except Exception:
+    token_endpoint = ""
+
+oidc = OAuth2(
+    flows={
+        "authorizationCode": OAuthFlowAuthorizationCode(
+            authorizationUrl=authorization_endpoint, tokenUrl=token_endpoint
+        )
+    }
+)
+
+# oidc = OpenIdConnect(openIdConnectUrl=OAUTH2_METADATA_URL)
 
 public_key_cache: tuple[datetime, tuple[str, str]] | None = None
 
 
 async def get_issuer_and_public_key() -> tuple[str, str]:
-    """Return keycloak URL and public key"""
+    """Return oauth2 URL and public key"""
     global public_key_cache
 
+    # TODO if we're awaiting asynch aiohttp, why not using sync httpx instead ?
     if not public_key_cache or public_key_cache[0] < datetime.now():
         issuer = (await SingletonAiohttp.query_url(OAUTH2_METADATA_URL)).get("issuer")
         public_key = (await SingletonAiohttp.query_url(issuer)).get("public_key")
@@ -72,7 +96,7 @@ async def get_issuer_and_public_key() -> tuple[str, str]:
 
 
 async def oidc_auth(token: str | None = Depends(oidc)):
-    """Return keycloak authentication info"""
+    """Return oauth2 authentication info"""
     if not token:
         raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Not authenticated")
     try:

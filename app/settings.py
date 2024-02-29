@@ -90,5 +90,10 @@ def env_bool(var: str, default: bool) -> bool:
 # TODO: do we want to keep this ?
 VERIFY_AUDIENCE = env_bool("VERIFY_AUDIENCE", default=True)
 
+# Show endpoints in the openapi swagger ?
 SHOW_APIKEY_ENDPOINTS = env_bool("SHOW_APIKEY_ENDPOINTS", default=True)
 SHOW_TECHNICAL_ENDPOINTS = env_bool("SHOW_TECHNICAL_ENDPOINTS", default=True)
+
+# Local administrator account to update apikey info in database from oauth2
+LOCAL_ADMIN_USER = env.get("LOCAL_ADMIN_USER", None)
+LOCAL_ADMIN_PASSWORD = env.get("LOCAL_ADMIN_PASSWORD", None)

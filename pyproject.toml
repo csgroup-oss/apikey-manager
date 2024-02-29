@@ -21,6 +21,7 @@ dependencies = [
     "pydantic_settings",
     "aiohttp",
     "slowapi",
+    "httpx",
 ]
 dynamic = ["version"]
 

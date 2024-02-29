@@ -64,13 +64,13 @@ class APIKeyCrud:
             meta,
             Column("api_key", String, primary_key=True, index=True),
             Column("name", String),
-            Column("user_id", String, index=True),
+            Column("user_id", String, index=True, nullable=False),
             Column("is_active", Boolean, default=True),
             Column("never_expire", Boolean, default=False),
             Column("expiration_date", DateTime),
             Column("latest_query_date", DateTime),
             Column("total_queries", Integer, default=0),
-            Column("iam_roles", JSON, default={}),
+            Column("iam_roles", JSON, default=[]),
             Column("config", JSON, default={}),
             Column("allowed_referers", JSON, default=None),
         )
@@ -82,6 +82,7 @@ class APIKeyCrud:
         name: str,
         user_id: str,
         never_expire: bool,
+        iam_roles: list[str],
         config: dict,
         allowed_referers: list[str] | None,
     ) -> str:
@@ -95,6 +96,7 @@ class APIKeyCrud:
                     never_expire=never_expire,
                     expiration_date=datetime.utcnow()
                     + timedelta(days=EXPIRATION_LIMIT),
+                    iam_roles=iam_roles,
                     config=config,
                     allowed_referers=allowed_referers,
                 )

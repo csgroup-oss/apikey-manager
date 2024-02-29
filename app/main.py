@@ -25,8 +25,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from .controllers import auth_router, health_router, test_router
-from .settings import ApiSettings, rate_limiter
+from .controllers import auth_router, check_router, health_router
+from .settings import (
+    SHOW_APIKEY_ENDPOINTS,
+    SHOW_TECHNICAL_ENDPOINTS,
+    ApiSettings,
+    rate_limiter,
+)
 from .utils.asyncget import SingletonAiohttp
 
 fastAPI_logger = logger  # convenient name
@@ -121,9 +126,24 @@ def get_application() -> FastAPI:
     application.state.limiter = rate_limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    application.include_router(health_router, prefix="/health", tags=["health"])
-    application.include_router(auth_router, prefix="/auth", tags=["_auth"])
-    application.include_router(test_router, prefix="/test", tags=["test"])
+    application.include_router(
+        auth_router,
+        prefix="/auth",
+        tags=["Manage API keys"],
+        include_in_schema=SHOW_APIKEY_ENDPOINTS,
+    )
+    application.include_router(
+        check_router,
+        prefix="/check",
+        tags=["Check API keys"],
+        include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
+    )
+    application.include_router(
+        health_router,
+        prefix="/health",
+        tags=["Health"],
+        include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
+    )
 
     return application
 

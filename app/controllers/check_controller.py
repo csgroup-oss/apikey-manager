@@ -18,19 +18,46 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Security
+from pydantic import BaseModel
 
-from .auth_controller import api_key_security
+from ..settings import rate_limiter
+from .auth_controller import api_key_header, api_key_query, api_key_security
 
 LOGGER = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.get("/")
+class CheckKey(BaseModel):
+    iam_roles: dict | None
+    config: dict | None
+
+
+@router.get("/api_key", response_model=CheckKey)
+@rate_limiter.limit("20/minute")
+async def check_api_key(
+    request: Request,  # needed by the rate limiter
+    query_param: Annotated[str, Security(api_key_query)],
+    header_param: Annotated[str, Security(api_key_header)],
+):
+    """
+    Check an API KEY validity in the database.
+    \f
+    Todo:
+        * Synchronize database with keycloak.
+    """
+    return await api_key_security(query_param, header_param)
+
+
+@router.get("/test")
 def some_test(
     request: Request, api_key_info: Annotated[dict, Depends(api_key_security)]
 ):
+    """
+    For internal testing only, check an API key validity and
+    return corresponding info.
+    """
     return {
         "api_key_info": api_key_info,
         "request.url": request.url,

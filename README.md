@@ -2,15 +2,16 @@
 
 ## Env vars
 
-| Variable                | Description         | Default value                                                                 |
-| ----------------------- | ------------------- | ----------------------------------------------------------------------------- |
-| ALLOWED_ORIGIN_REGEX    |                     | `.*(geostorm\.eu\|csgroup\.space)`                                            |
-| API_PREFIX              |                     |                                                                               |
-| DEBUG                   | Display SQL request | `False`                                                                       |
-| API_KEYS_DB_URL         |                     | `sqlite:///./test.db`                                                         |
-| API_KEYS_EXPIRE_IN_DAYS |                     | `15`                                                                          |
-| API_KEYS_SHOW_ENDPOINTS |                     | `True`                                                                        |
-| OAUTH2_METADATA_URL     |                     | `https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration` |
+| Variable                 | Description         | Default value                                                                 |
+| ------------------------ | ------------------- | ----------------------------------------------------------------------------- |
+| ALLOWED_ORIGIN_REGEX     |                     | `.*(geostorm\.eu\|csgroup\.space)`                                            |
+| API_PREFIX               |                     |                                                                               |
+| DEBUG                    | Display SQL request | `False`                                                                       |
+| API_KEYS_DB_URL          |                     | `sqlite:///./test.db`                                                         |
+| API_KEYS_EXPIRE_IN_DAYS  |                     | `15`                                                                          |
+| SHOW_APIKEY_ENDPOINTS    |                     | `True`                                                                        |
+| SHOW_TECHNICAL_ENDPOINTS |                     | `False`                                                                       |
+| OAUTH2_METADATA_URL      |                     | `https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration` |
 
 ## Developement
 

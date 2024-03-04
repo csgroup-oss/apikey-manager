@@ -26,6 +26,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from .controllers import auth_router, check_router, health_router
+from .controllers.auth_controller import router_prefix as auth_router_prefix
 from .settings import (
     SHOW_APIKEY_ENDPOINTS,
     SHOW_TECHNICAL_ENDPOINTS,
@@ -69,8 +70,9 @@ def get_application() -> FastAPI:
         lifespan=lifespan,
         redoc_url=None,
         swagger_ui_init_oauth={
-            "clientId": "fastapi_test",
-            "appName": "Doc Tools",
+            # we use the value passed by env var instead
+            "clientId": "(this value is not used)",
+            "appName": "APIKeyManager",
             "usePkceWithAuthorizationCodeGrant": True,
             "scopes": "openid profile",
         },
@@ -128,7 +130,7 @@ def get_application() -> FastAPI:
 
     application.include_router(
         auth_router,
-        prefix="/auth",
+        prefix=auth_router_prefix,
         tags=["Manage API keys"],
         include_in_schema=SHOW_APIKEY_ENDPOINTS,
     )

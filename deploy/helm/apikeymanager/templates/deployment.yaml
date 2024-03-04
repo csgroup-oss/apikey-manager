@@ -39,8 +39,10 @@ spec:
               value: {{  .Values.config.debug | quote }}
             - name: "API_KEYS_EXPIRE_IN_DAYS"
               value: {{  .Values.config.api_keys_expire_in_days | quote }}
-            - name: "API_KEYS_SHOW_ENDPOINTS"
-              value: {{  .Values.config.api_keys_show_endpoints | quote }}
+            - name: "SHOW_APIKEY_ENDPOINTS"
+              value: {{  .Values.config.show_apikey_endpoints | quote }}
+            - name: "SHOW_TECHNICAL_ENDPOINTS"
+              value: {{  .Values.config.show_technical_endpoints | quote }}
             - name: "ALLOWED_ORIGIN_REGEX"
               valueFrom:
                 secretKeyRef:

@@ -83,6 +83,19 @@ def env_bool(var: str, default: bool) -> bool:
     return default
 
 
+# TODO: update README.md and helm charts for these env variables
+
+OAUTH2_METADATA_URL = env.get(
+    "OAUTH2_METADATA_URL",
+    "https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration",
+)
+
+# Client id and secret used for oauth2 operations.
+# The 'implicit' flow must be enabled for this client
+# see: https://www.keycloak.org/docs/latest/securing_apps/#_javascript_implicit_flow
+OAUTH2_CLIENT_ID = env["OAUTH2_CLIENT_ID"]
+OAUTH2_CLIENT_SECRET = env["OAUTH2_CLIENT_SECRET"]
+
 # See https://github.com/marcospereirampj/python-keycloak/issues/89
 # There has been a change to KeyCloak recently, and it doesn't map the client ID
 # into the auth field of the token by default any more.
@@ -92,8 +105,4 @@ VERIFY_AUDIENCE = env_bool("VERIFY_AUDIENCE", default=True)
 
 # Show endpoints in the openapi swagger ?
 SHOW_APIKEY_ENDPOINTS = env_bool("SHOW_APIKEY_ENDPOINTS", default=True)
-SHOW_TECHNICAL_ENDPOINTS = env_bool("SHOW_TECHNICAL_ENDPOINTS", default=True)
-
-# Local administrator account to update apikey info in database from oauth2
-LOCAL_ADMIN_USER = env.get("LOCAL_ADMIN_USER", None)
-LOCAL_ADMIN_PASSWORD = env.get("LOCAL_ADMIN_PASSWORD", None)
+SHOW_TECHNICAL_ENDPOINTS = env_bool("SHOW_TECHNICAL_ENDPOINTS", default=False)

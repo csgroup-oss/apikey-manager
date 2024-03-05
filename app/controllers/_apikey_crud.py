@@ -37,7 +37,11 @@ from sqlalchemy import (
     desc,
     select,
 )
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import (
+    HTTP_403_FORBIDDEN,
+    HTTP_404_NOT_FOUND,
+    HTTP_422_UNPROCESSABLE_ENTITY,
+)
 
 LIST_API_KEYS = True
 
@@ -105,13 +109,18 @@ class APIKeyCrud:
 
         return api_key
 
-    def renew_key(self, api_key: str, new_expiration_date: str | None) -> str | None:
+    def check_key_user(self, user_id: str, api_key: str) -> None:
+        """
+        Check that an api key exists and belongs to a user.
+
+        Raises:
+            404 HTTP exception if the key doesn't exist.
+            403 HTTP exception if the key doesn't belong to the user.
+        """
         with self.engine.connect() as conn:
             t = self.t_apitoken
             resp = conn.execute(
-                select(
-                    t.c["is_active", "total_queries", "expiration_date", "never_expire"]
-                ).where(t.c.api_key == api_key)
+                select(t.c["user_id"]).where(t.c.api_key == api_key)
             ).first()
 
             # API key not found
@@ -119,6 +128,26 @@ class APIKeyCrud:
                 raise HTTPException(
                     status_code=HTTP_404_NOT_FOUND, detail="API key not found"
                 )
+
+            if resp[0] != user_id:
+                raise HTTPException(
+                    status_code=HTTP_403_FORBIDDEN,
+                    detail="You are not the owner of this API key",
+                )
+
+    def renew_key(
+        self, user_id: str, api_key: str, new_expiration_date: str | None
+    ) -> str | None:
+        # Check that the api key exists and belongs to the given user.
+        self.check_key_user(user_id, api_key)
+
+        with self.engine.connect() as conn:
+            t = self.t_apitoken
+            resp = conn.execute(
+                select(
+                    t.c["is_active", "total_queries", "expiration_date", "never_expire"]
+                ).where(t.c.api_key == api_key)
+            ).first()
 
             response_lines = []
 
@@ -159,13 +188,16 @@ class APIKeyCrud:
 
             return " ".join(response_lines)
 
-    def revoke_key(self, api_key: str) -> None:
+    def revoke_key(self, user_id: str, api_key: str) -> None:
         """
         Revokes an API key
 
         Args:
             api_key: the API key to revoke
         """
+
+        # Check that the api key exists and belongs to the given user.
+        self.check_key_user(user_id, api_key)
 
         with self.engine.connect() as conn:
             t = self.t_apitoken

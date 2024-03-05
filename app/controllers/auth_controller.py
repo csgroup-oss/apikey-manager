@@ -172,7 +172,7 @@ async def show_my_information(oauth2_info: Annotated[dict, Depends(oauth2_login)
     return {
         "login": oauth2_info["preferred_username"],
         "name": oauth2_info.get("name", None),
-        "id": oauth2_info["sub"],
+        "id": oauth2_info["sub"],  # sub = id of the subject
         "token_creation": datetime.fromtimestamp(oauth2_info["auth_time"]),
         "token_expire": datetime.fromtimestamp(oauth2_info["exp"]),
         "roles": oauth2_info.get("realm_access", {}).get("roles", []),
@@ -262,20 +262,22 @@ async def list_my_api_keys(
     ]
 
 
-@router.get("/api_key/revoke", dependencies=[Depends(oauth2_login)])
+@router.get("/api_key/revoke")
 async def revoke_api_key(
+    oauth2_info: Annotated[dict, Depends(oauth2_login)],
     api_key: Annotated[
         str, Query(..., alias="api-key", description="the api_key to revoke")
-    ]
+    ],
 ) -> None:
     """
     Revoke an API key associated with my account.
     """
-    return apikey_crud.revoke_key(api_key)
+    return apikey_crud.revoke_key(oauth2_info["sub"], api_key)
 
 
-@router.get("/api_key/renew", dependencies=[Depends(oauth2_login)])
+@router.get("/api_key/renew")
 async def renew_api_key(
+    oauth2_info: Annotated[dict, Depends(oauth2_login)],
     api_key: Annotated[
         str, Query(..., alias="api-key", description="the API key to renew")
     ],
@@ -290,4 +292,4 @@ async def renew_api_key(
     """
     Renew an API key associated with my account, reactivate it if it was revoked.
     """
-    return apikey_crud.renew_key(api_key, expiration_date)
+    return apikey_crud.renew_key(oauth2_info["sub"], api_key, expiration_date)

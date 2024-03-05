@@ -53,10 +53,15 @@ LOGGER = logging.getLogger(__name__)
 router = APIRouter()
 router_prefix = "/auth"
 
-# Get endpoints for oauth2 authentication.
-authorization_endpoint = (
-    httpx.get(OAUTH2_METADATA_URL).json().get("authorization_endpoint")
-)
+
+def oauth2_endpoint(endpoint: str) -> str:
+    """Get endpoints for oauth2 authentication"""
+    response = httpx.get(OAUTH2_METADATA_URL)
+    response.raise_for_status()
+    return response.json().get(endpoint)
+
+
+authorization_endpoint = oauth2_endpoint("authorization_endpoint")
 
 # See: https://developer.zendesk.com/api-reference/sales-crm/authentication/requests/
 # Authorization Code Flow - Three Legged - is the most secure authentication flow,
@@ -82,11 +87,12 @@ class OAuth2Implicit(OAuth2AuthorizationCodeBearer):
 
 
 # Use this implementation, override the authorization url to use our custom endpoint
-oauth2 = OAuth2Implicit(authorizationUrl=f"{router_prefix}/custom_oauth2_authorization")
+# that is defined just below.
+oauth2 = OAuth2Implicit(authorizationUrl=f"{router_prefix}/auth")
 
 
-@router.get("/custom_oauth2_authorization", include_in_schema=SHOW_TECHNICAL_ENDPOINTS)
-async def custom_oauth2_authorization(request: Request):
+@router.get("/auth", include_in_schema=SHOW_TECHNICAL_ENDPOINTS)
+async def custom_authorization(request: Request):
     """Custom endpoint to override the authorization url to the oauth2 server."""
 
     # Read the request query params, override the client id to use the
@@ -107,7 +113,6 @@ async def get_issuer_and_public_key() -> tuple[str, str]:
     """Return oauth2 URL and public key"""
     global public_key_cache
 
-    # TODO if we're awaiting asynch aiohttp, why not using sync httpx instead ?
     if not public_key_cache or public_key_cache[0] < datetime.now():
         issuer = (await SingletonAiohttp.query_url(OAUTH2_METADATA_URL)).get("issuer")
         public_key = (await SingletonAiohttp.query_url(issuer)).get("public_key")

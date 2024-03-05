@@ -30,7 +30,7 @@ router = APIRouter()
 
 
 class CheckKey(BaseModel):
-    iam_roles: dict | None
+    iam_roles: list | None
     config: dict | None
 
 

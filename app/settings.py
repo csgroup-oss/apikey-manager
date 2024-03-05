@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from os import environ as env
+import os
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -71,21 +71,13 @@ def env_bool(var: str, default: bool) -> bool:
     Return False if set to 0, false or no (case insensitive).
     Return the default value if not set or set to a different value.
     """
-    try:
-        env_var = env[var].lower()  # read the env var value
-    except KeyError:
-        return default  # env var is not set
-
-    if (env_var == "1") or (env_var == "true") or (env_var == "yes"):
-        return True
-    elif (env_var == "0") or (env_var == "false") or (env_var == "no"):
-        return False
-    return default
+    val = os.getenv(var, str(default)).lower()
+    return val in ("y", "yes", "t", "true", "on", "1")
 
 
 # TODO: update README.md and helm charts for these env variables
 
-OAUTH2_METADATA_URL = env.get(
+OAUTH2_METADATA_URL = os.getenv(
     "OAUTH2_METADATA_URL",
     "https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration",
 )
@@ -93,8 +85,8 @@ OAUTH2_METADATA_URL = env.get(
 # Client id and secret used for oauth2 operations.
 # The 'implicit' flow must be enabled for this client
 # see: https://www.keycloak.org/docs/latest/securing_apps/#_javascript_implicit_flow
-OAUTH2_CLIENT_ID = env["OAUTH2_CLIENT_ID"]
-OAUTH2_CLIENT_SECRET = env["OAUTH2_CLIENT_SECRET"]
+OAUTH2_CLIENT_ID = os.environ["OAUTH2_CLIENT_ID"]
+OAUTH2_CLIENT_SECRET = os.environ["OAUTH2_CLIENT_SECRET"]
 
 # See https://github.com/marcospereirampj/python-keycloak/issues/89
 # There has been a change to KeyCloak recently, and it doesn't map the client ID

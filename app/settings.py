@@ -77,14 +77,18 @@ def env_bool(var: str, default: bool) -> bool:
 
 # TODO: update README.md and helm charts for these env variables
 
-OAUTH2_METADATA_URL = os.getenv(
-    "OAUTH2_METADATA_URL",
-    "https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration",
+OAUTH2_SERVER_URL = os.getenv(
+    "OAUTH2_SERVER_URL", "https://auth.p3.csgroup.space"
+).strip("/")
+OAUTH2_REALM = os.getenv("OAUTH2_REALM", "METIS").strip("/")
+
+OAUTH2_METADATA_URL = (
+    f"{OAUTH2_SERVER_URL}/realms/{OAUTH2_REALM}/.well-known/openid-configuration"
 )
 
-# Client id and secret used for oauth2 operations.
-# The 'implicit' flow must be enabled for this client
-# see: https://www.keycloak.org/docs/latest/securing_apps/#_javascript_implicit_flow
+# Admin client id and secret used for oauth2 operations.
+# The client must have have the real_management/view_users
+# and "implicit" flow privileges.
 OAUTH2_CLIENT_ID = os.environ["OAUTH2_CLIENT_ID"]
 OAUTH2_CLIENT_SECRET = os.environ["OAUTH2_CLIENT_SECRET"]
 

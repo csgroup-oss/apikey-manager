@@ -19,11 +19,15 @@
 """Interaction with database.
 """
 import os
+import sys
 import threading
 import uuid
 from datetime import datetime, timedelta
 
+from cachetools import TTLCache, cached
 from fastapi import HTTPException
+from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
+from keycloak.exceptions import KeycloakGetError
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -43,6 +47,13 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
+from ..settings import (
+    OAUTH2_CLIENT_ID,
+    OAUTH2_CLIENT_SECRET,
+    OAUTH2_REALM,
+    OAUTH2_SERVER_URL,
+)
+
 LIST_API_KEYS = True
 
 # NOTE : use from databases import Database for working with async pg
@@ -53,6 +64,16 @@ DATABASE_URL = os.environ.get("API_KEYS_DB_URL", "sqlite:///./test.db")
 EXPIRATION_LIMIT = int(os.environ.get("API_KEYS_EXPIRE_IN_DAYS", "15"))
 
 DEBUG = bool(os.environ.get("DEBUG", False))
+
+# Init an admin keycloak connection from the admin
+keycloak_connection = KeycloakOpenIDConnection(
+    server_url=OAUTH2_SERVER_URL,
+    realm_name=OAUTH2_REALM,
+    client_id=OAUTH2_CLIENT_ID,
+    client_secret_key=str(OAUTH2_CLIENT_SECRET),
+    verify=True,
+)
+keycloak_admin = KeycloakAdmin(connection=keycloak_connection)
 
 
 class APIKeyCrud:
@@ -207,6 +228,58 @@ class APIKeyCrud:
 
             conn.commit()
 
+    # Call this function for each api key only every ttl seconds
+    @cached(cache=TTLCache(maxsize=sys.maxsize, ttl=300))  # 5 minutes
+    def __update_key_from_keycloak(self, api_key: str) -> None:
+        """
+        From time to time we update the API key information in the database
+        from the keycloak user information
+        """
+
+        with self.engine.connect() as conn:
+            t = self.t_apitoken
+
+            # Get the owner (user id) of the api key from database
+            response = conn.execute(
+                select(t.c["user_id"]).where(t.c.api_key == api_key)
+            ).first()
+
+            # The api key doesn't exist
+            if not response:
+                return None
+
+            # Get user info from keycloak
+            user_id = response[0]
+            is_active = False
+            iam_roles = []
+
+            try:
+                user = keycloak_admin.get_user(user_id)
+                is_active = user["enabled"]
+                iam_roles = [
+                    role["name"]
+                    for role in keycloak_admin.get_realm_roles_of_user(user_id)
+                ]
+
+            # If the user is not found, disable them (is_active=False, iam_roles=[])
+            except (KeycloakGetError, KeyError):
+                pass
+
+            # For any other exception, do nothing, don't update the database
+            except Exception:
+                return
+
+            # Update the database
+            conn.execute(
+                t.update()
+                .where(t.c.api_key == api_key)
+                .values(
+                    is_active=is_active,
+                    iam_roles=iam_roles,
+                )
+            )
+            conn.commit()
+
     def check_key(self, api_key: str) -> dict | None:
         """
         Checks if an API key is valid
@@ -214,6 +287,8 @@ class APIKeyCrud:
         Args:
              api_key: the API key to validate
         """
+
+        self.__update_key_from_keycloak(api_key)
 
         with self.engine.connect() as conn:
             t = self.t_apitoken

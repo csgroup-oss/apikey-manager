@@ -45,7 +45,8 @@ repos:
     rev: v1.4.1
     hooks:
       - id: mypy
-        args: ["--ignore-missing-imports"]
+        args:
+          ["--ignore-missing-imports", "--install-types", "--non-interactive"]
         additional_dependencies: [types-PyYAML, types-requests]
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.4.0

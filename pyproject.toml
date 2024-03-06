@@ -23,7 +23,6 @@ dependencies = [
     "slowapi",
     "httpx",
     "python-keycloak",
-    "cachetools"
 ]
 dynamic = ["version"]
 

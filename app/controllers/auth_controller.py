@@ -229,6 +229,7 @@ class UsageLog(BaseModel):
     expiration_date: datetime
     latest_query_date: datetime | None
     total_queries: int
+    latest_sync_date: datetime | None
     iam_roles: list | None
     config: dict | None
     allowed_referers: list[str] | None
@@ -254,9 +255,10 @@ async def list_my_api_keys(
             expiration_date=row[5],
             latest_query_date=row[6],
             total_queries=row[7],
-            iam_roles=row[8],
-            config=row[9],
-            allowed_referers=row[10],
+            latest_sync_date=row[8],
+            iam_roles=row[9],
+            config=row[10],
+            allowed_referers=row[11],  # type: ignore
         )
         for row in apikey_crud.get_usage_stats(oauth2_info["sub"])
     ]

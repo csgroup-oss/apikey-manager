@@ -18,16 +18,15 @@
 
 """Interaction with database.
 """
+import logging
 import os
-import sys
 import threading
 import uuid
 from datetime import datetime, timedelta
 
-from cachetools import TTLCache, cached
 from fastapi import HTTPException
 from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
-from keycloak.exceptions import KeycloakGetError
+from keycloak.exceptions import KeycloakConnectionError, KeycloakGetError
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -61,11 +60,19 @@ LIST_API_KEYS = True
 
 DATABASE_URL = os.environ.get("API_KEYS_DB_URL", "sqlite:///./test.db")
 
+# TODO: add to helm charts ?
 EXPIRATION_LIMIT = int(os.environ.get("API_KEYS_EXPIRE_IN_DAYS", "15"))
+
+# Limit in minutes after which we should update the API key information
+# in the database from the keycloak user information
+# TODO: add to helm charts ?
+SYNC_LIMIT = timedelta(minutes=float(os.environ.get("API_KEYS_SYNC_IN_MINUTES", "5")))
+
+LOGGER = logging.getLogger(__name__)
 
 DEBUG = bool(os.environ.get("DEBUG", False))
 
-# Init an admin keycloak connection from the admin
+# Init an admin keycloak connection from the admin client
 keycloak_connection = KeycloakOpenIDConnection(
     server_url=OAUTH2_SERVER_URL,
     realm_name=OAUTH2_REALM,
@@ -95,6 +102,7 @@ class APIKeyCrud:
             Column("expiration_date", DateTime),
             Column("latest_query_date", DateTime),
             Column("total_queries", Integer, default=0),
+            Column("latest_sync_date", DateTime),
             Column("iam_roles", JSON, default=[]),
             Column("config", JSON, default={}),
             Column("allowed_referers", JSON, default=None),
@@ -121,6 +129,7 @@ class APIKeyCrud:
                     never_expire=never_expire,
                     expiration_date=datetime.utcnow()
                     + timedelta(days=EXPIRATION_LIMIT),
+                    latest_sync_date=datetime.utcnow(),
                     iam_roles=iam_roles,
                     config=config,
                     allowed_referers=allowed_referers,
@@ -228,8 +237,6 @@ class APIKeyCrud:
 
             conn.commit()
 
-    # Call this function for each api key only every ttl seconds
-    @cached(cache=TTLCache(maxsize=sys.maxsize, ttl=300))  # 5 minutes
     def __update_key_from_keycloak(self, api_key: str) -> None:
         """
         From time to time we update the API key information in the database
@@ -241,18 +248,19 @@ class APIKeyCrud:
 
             # Get the owner (user id) of the api key from database
             response = conn.execute(
-                select(t.c["user_id"]).where(t.c.api_key == api_key)
+                select(t.c["name", "user_id", "latest_sync_date"]).where(
+                    t.c.api_key == api_key
+                )
             ).first()
 
-            # The api key doesn't exist
-            if not response:
+            # The api key doesn't exist or if the last sync is too recent, do nothing
+            if (not response) or ((datetime.utcnow() - response[2]) < SYNC_LIMIT):
                 return None
 
-            # Get user info from keycloak
-            user_id = response[0]
-            is_active = False
-            iam_roles = []
+            user_name = response[0]
+            user_id = response[1]
 
+            # Get user info from keycloak
             try:
                 user = keycloak_admin.get_user(user_id)
                 is_active = user["enabled"]
@@ -261,13 +269,35 @@ class APIKeyCrud:
                     for role in keycloak_admin.get_realm_roles_of_user(user_id)
                 ]
 
-            # If the user is not found, disable them (is_active=False, iam_roles=[])
-            except (KeycloakGetError, KeyError):
-                pass
+            except KeycloakGetError as error:
+                # If the user is not found, this means he was removed from keycloak.
+                # Thus we must remove all his api keys from the database.
+                if (error.response_code == 404) and (
+                    "User not found" in error.response_body.decode("utf-8")
+                ):
+                    LOGGER.warning(
+                        f"User '{user_name}/{user_id}' not found in keycloak. "
+                        "We remove their api keys from the database."
+                    )
+                    conn.execute(t.delete().where(t.c.user_id == user_id))
+                    conn.commit()
+                    return
 
-            # For any other exception, do nothing, don't update the database
-            except Exception:
+                # Else just raise other errors.
+                # TODO: what could they be ? Handle special cases ?
+                raise
+
+            # Connection error to the keycloak (e.g. service unavailable):
+            # log error and do nothing more (don't update database)
+            # TODO: to be confirmed.
+            except KeycloakConnectionError as error:
+                LOGGER.error(error)
                 return
+
+            # Raise any other error.
+            # TODO: what could they be ? Handle special cases ?
+            # except Exception:
+            #     raise
 
             # Update the database
             conn.execute(
@@ -276,6 +306,7 @@ class APIKeyCrud:
                 .values(
                     is_active=is_active,
                     iam_roles=iam_roles,
+                    latest_sync_date=datetime.utcnow(),
                 )
             )
             conn.commit()

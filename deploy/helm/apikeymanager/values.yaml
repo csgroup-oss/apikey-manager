@@ -13,7 +13,11 @@ config:
   api_keys_expire_in_days: 15
   show_apikey_endpoints: true
   show_technical_endpoints: false
-  oidc_metadata_url: https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration
+  verify_audience: "true"
+  oauth2_server_url: https://auth.p3.csgroup.space
+  oauth2_realm: METIS
+  oauth2_client_id: ""
+  oauth2_client_secret: ""
 
 env: []
 

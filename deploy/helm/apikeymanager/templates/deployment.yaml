@@ -43,6 +43,8 @@ spec:
               value: {{  .Values.config.show_apikey_endpoints | quote }}
             - name: "SHOW_TECHNICAL_ENDPOINTS"
               value: {{  .Values.config.show_technical_endpoints | quote }}
+            - name: "VERIFY_AUDIENCE"
+              value: {{  .Values.config.verify_audience | quote }}
             - name: "ALLOWED_ORIGIN_REGEX"
               valueFrom:
                 secretKeyRef:
@@ -53,10 +55,25 @@ spec:
                 secretKeyRef:
                   key:  api_keys_db_url
                   name: {{ .Release.Name }}-auth
-            - name: "OAUTH2_METADATA_URL"
+            - name: "OAUTH2_SERVER_URL"
               valueFrom:
                 secretKeyRef:
-                  key:  oidc_metadata_url
+                  key:  oauth2_server_url
+                  name: {{ .Release.Name }}-auth
+            - name: "OAUTH2_REALM"
+              valueFrom:
+                secretKeyRef:
+                  key:  oauth2_realm
+                  name: {{ .Release.Name }}-auth
+            - name: "OAUTH2_CLIENT_ID"
+              valueFrom:
+                secretKeyRef:
+                  key:  oauth2_client_id
+                  name: {{ .Release.Name }}-auth
+            - name: "OAUTH2_CLIENT_SECRET"
+              valueFrom:
+                secretKeyRef:
+                  key:  oauth2_client_secret
                   name: {{ .Release.Name }}-auth
           {{- range $key, $val := .Values.env }}
             - name: {{ $key }}

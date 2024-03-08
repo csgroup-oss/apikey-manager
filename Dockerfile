@@ -24,7 +24,7 @@ RUN [ "$TEST_ENABLED" = "false" ] && echo "skipping tests" || eval "$TEST_COMMAN
 
 FROM build as ship
 WORKDIR /home/app/
-COPY --chown=app:app config.yaml     .
+# COPY --chown=app:app config.yaml     .
 COPY --chown=app:app app/            app/
 
 USER app

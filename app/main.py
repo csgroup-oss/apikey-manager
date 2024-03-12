@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import re
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -48,6 +49,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator:
 
 
 def get_application() -> FastAPI:
+    # For cluster deployment: override the swagger /docs URL from an environment
+    # variable. Also set the openapi.json URL under the same path.
+    try:
+        docs_url = os.environ["APIKEYMAN_DOCS_URL"].strip("/")
+        docs_params = {
+            "docs_url": f"/{docs_url}",
+            "openapi_url": f"/{docs_url}/openapi.json",
+        }
+    except KeyError:
+        docs_params = {}
+
     tags_metadata = [
         {
             "name": "apikeymanager",
@@ -64,10 +76,10 @@ def get_application() -> FastAPI:
             "url": "https://gitlab.si.c-s.fr/space_platforms/sandbox/geojson-proxy",
             "email": "support@csgroup.space",
         },
-        docs_url="/docs/",
         root_path=api_settings.root_path,
         openapi_tags=tags_metadata,
         lifespan=lifespan,
+        **docs_params,
         redoc_url=None,
         swagger_ui_init_oauth={
             # we use the value passed by env var instead

@@ -25,7 +25,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
-from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
+from keycloak import KeycloakAdmin, KeycloakError, KeycloakOpenIDConnection
 from keycloak.exceptions import KeycloakConnectionError, KeycloakGetError
 from sqlalchemy import (
     JSON,
@@ -73,14 +73,20 @@ LOGGER = logging.getLogger(__name__)
 DEBUG = bool(os.environ.get("DEBUG", False))
 
 # Init an admin keycloak connection from the admin client
-keycloak_connection = KeycloakOpenIDConnection(
-    server_url=OAUTH2_SERVER_URL,
-    realm_name=OAUTH2_REALM,
-    client_id=OAUTH2_CLIENT_ID,
-    client_secret_key=str(OAUTH2_CLIENT_SECRET),
-    verify=True,
-)
-keycloak_admin = KeycloakAdmin(connection=keycloak_connection)
+try:
+    keycloak_connection = KeycloakOpenIDConnection(
+        server_url=OAUTH2_SERVER_URL,
+        realm_name=OAUTH2_REALM,
+        client_id=OAUTH2_CLIENT_ID,
+        client_secret_key=str(OAUTH2_CLIENT_SECRET),
+        verify=True,
+    )
+    keycloak_admin = KeycloakAdmin(connection=keycloak_connection)
+except KeycloakError as error:
+    raise RuntimeError(
+        f"Error connecting with keycloak to server_url={OAUTH2_SERVER_URL!r}, "
+        f"realm_name={OAUTH2_REALM!r} with client_id={OAUTH2_CLIENT_ID!r}"
+    ) from error
 
 
 class APIKeyCrud:

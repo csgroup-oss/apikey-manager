@@ -77,6 +77,13 @@ def env_bool(var: str, default: bool) -> bool:
 
 # TODO: update README.md and helm charts for these env variables
 
+
+# URL prefix for cluster deployment as '/prefix' or empty string if undefined
+try:
+    URL_PREFIX = "/" + os.environ["APIKEYMAN_URL_PREFIX"].strip("/")
+except KeyError:
+    URL_PREFIX = ""
+
 OAUTH2_SERVER_URL = os.getenv(
     "OAUTH2_SERVER_URL", "https://auth.p3.csgroup.space"
 ).strip("/")

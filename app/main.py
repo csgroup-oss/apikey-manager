@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import re
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -31,6 +30,7 @@ from .controllers.auth_controller import router_prefix as auth_router_prefix
 from .settings import (
     SHOW_APIKEY_ENDPOINTS,
     SHOW_TECHNICAL_ENDPOINTS,
+    URL_PREFIX,
     ApiSettings,
     rate_limiter,
 )
@@ -51,13 +51,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator:
 def get_application() -> FastAPI:
     # For cluster deployment: override the swagger /docs URL from an environment
     # variable. Also set the openapi.json URL under the same path.
-    try:
-        docs_url = os.environ["APIKEYMAN_DOCS_URL"].strip("/")
+    if URL_PREFIX:
+        docs_url = URL_PREFIX.strip("/")
         docs_params = {
             "docs_url": f"/{docs_url}",
             "openapi_url": f"/{docs_url}/openapi.json",
         }
-    except KeyError:
+    else:
         docs_params = {}
 
     tags_metadata = [
@@ -142,19 +142,19 @@ def get_application() -> FastAPI:
 
     application.include_router(
         auth_router,
-        prefix=auth_router_prefix,
+        prefix=f"{URL_PREFIX}{auth_router_prefix}",
         tags=["Manage API keys"],
         include_in_schema=SHOW_APIKEY_ENDPOINTS,
     )
     application.include_router(
         check_router,
-        prefix="/check",
+        prefix=f"{URL_PREFIX}/check",
         tags=["Check API keys"],
         include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
     )
     application.include_router(
         health_router,
-        prefix="/health",
+        prefix=f"{URL_PREFIX}/health",
         tags=["Health"],
         include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
     )

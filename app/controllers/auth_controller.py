@@ -35,6 +35,7 @@ from ..settings import (
     OAUTH2_CLIENT_ID,
     OAUTH2_METADATA_URL,
     SHOW_TECHNICAL_ENDPOINTS,
+    URL_PREFIX,
     VERIFY_AUDIENCE,
 )
 from ..utils.asyncget import SingletonAiohttp
@@ -51,7 +52,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 router = APIRouter()
-router_prefix = "/auth"
+router_prefix = "/auth"  # TODO: put in settings ?
 
 
 def oauth2_endpoint(endpoint: str) -> str:
@@ -88,7 +89,7 @@ class OAuth2Implicit(OAuth2AuthorizationCodeBearer):
 
 # Use this implementation, override the authorization url to use our custom endpoint
 # that is defined just below.
-oauth2 = OAuth2Implicit(authorizationUrl=f"{router_prefix}/auth")
+oauth2 = OAuth2Implicit(authorizationUrl=f"{URL_PREFIX}{router_prefix}/auth")
 
 
 @router.get("/auth", include_in_schema=SHOW_TECHNICAL_ENDPOINTS)

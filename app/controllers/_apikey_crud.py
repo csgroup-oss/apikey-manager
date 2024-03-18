@@ -93,7 +93,7 @@ class APIKeyCrud:
     """Class handling SQLite connection and writes"""
 
     def __init__(self) -> None:
-        self.engine = create_engine(DATABASE_URL, echo=DEBUG)
+        self.engine = create_engine(DATABASE_URL, echo=DEBUG, pool_pre_ping=True)
 
         meta = MetaData()
 

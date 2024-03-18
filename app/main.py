@@ -148,13 +148,13 @@ def get_application() -> FastAPI:
     )
     application.include_router(
         check_router,
-        prefix=f"{URL_PREFIX}/check",
+        prefix="/check",
         tags=["Check API keys"],
         include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
     )
     application.include_router(
         health_router,
-        prefix=f"{URL_PREFIX}/health",
+        prefix="/health",
         tags=["Health"],
         include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
     )

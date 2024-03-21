@@ -103,6 +103,7 @@ class APIKeyCrud:
             Column("api_key", String, primary_key=True, index=True),
             Column("name", String),
             Column("user_id", String, index=True, nullable=False),
+            Column("user_login", String),
             Column("is_active", Boolean, default=True),
             Column("never_expire", Boolean, default=False),
             Column("expiration_date", DateTime),
@@ -120,6 +121,7 @@ class APIKeyCrud:
         self,
         name: str,
         user_id: str,
+        user_login: str,
         never_expire: bool,
         iam_roles: list[str],
         config: dict,
@@ -132,6 +134,7 @@ class APIKeyCrud:
                     api_key=api_key,
                     name=name,
                     user_id=user_id,
+                    user_login=user_login,
                     never_expire=never_expire,
                     expiration_date=datetime.utcnow()
                     + timedelta(days=EXPIRATION_LIMIT),
@@ -254,7 +257,7 @@ class APIKeyCrud:
 
             # Get the owner (user id) of the api key from database
             response = conn.execute(
-                select(t.c["name", "user_id", "latest_sync_date"]).where(
+                select(t.c["user_id", "user_login", "latest_sync_date"]).where(
                     t.c.api_key == api_key
                 )
             ).first()
@@ -263,8 +266,8 @@ class APIKeyCrud:
             if (not response) or ((datetime.utcnow() - response[2]) < SYNC_LIMIT):
                 return None
 
-            user_name = response[0]
-            user_id = response[1]
+            user_id = response[0]
+            user_login = response[1]
 
             # Get user info from keycloak
             try:
@@ -282,7 +285,7 @@ class APIKeyCrud:
                     "User not found" in error.response_body.decode("utf-8")
                 ):
                     LOGGER.warning(
-                        f"User '{user_name}/{user_id}' not found in keycloak. "
+                        f"User '{user_login}/{user_id}' not found in keycloak. "
                         "We remove their api keys from the database."
                     )
                     conn.execute(t.delete().where(t.c.user_id == user_id))
@@ -330,7 +333,7 @@ class APIKeyCrud:
         with self.engine.connect() as conn:
             t = self.t_apitoken
             response = conn.execute(
-                select(t.c["iam_roles", "config"]).where(
+                select(t.c["user_login", "iam_roles", "config"]).where(
                     (t.c.api_key == api_key)
                     & t.c.is_active
                     & (t.c.never_expire | (t.c.expiration_date > datetime.utcnow()))
@@ -367,7 +370,21 @@ class APIKeyCrud:
     def get_usage_stats(
         self, user_id: str
     ) -> list[
-        tuple[str, str, str, bool, bool, datetime, datetime, int, dict, dict, dict]
+        tuple[
+            str,
+            str,
+            str,
+            str,
+            bool,
+            bool,
+            datetime,
+            datetime,
+            int,
+            datetime,
+            dict,
+            dict,
+            dict,
+        ]
     ]:
         """
         Returns usage stats for all API keys

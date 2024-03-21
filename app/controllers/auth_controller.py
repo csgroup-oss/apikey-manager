@@ -215,6 +215,7 @@ async def create_api_key(
     return apikey_crud.create_key(
         name,
         oauth2_info["sub"],
+        oauth2_info["preferred_username"],
         never_expires,
         oauth2_info.get("realm_access", {}).get("roles", []),
         config_json,
@@ -225,6 +226,7 @@ async def create_api_key(
 class UsageLog(BaseModel):
     api_key: str | None = None
     name: str
+    user_login: str
     is_active: bool
     never_expire: bool
     expiration_date: datetime
@@ -251,15 +253,16 @@ async def list_my_api_keys(
         UsageLog(
             api_key=row[0],
             name=row[1],
-            is_active=row[3],
-            never_expire=row[4],
-            expiration_date=row[5],
-            latest_query_date=row[6],
-            total_queries=row[7],
-            latest_sync_date=row[8],
-            iam_roles=row[9],
-            config=row[10],
-            allowed_referers=row[11],  # type: ignore
+            user_login=row[3],
+            is_active=row[4],
+            never_expire=row[5],
+            expiration_date=row[6],
+            latest_query_date=row[7],
+            total_queries=row[8],
+            latest_sync_date=row[9],
+            iam_roles=row[10],
+            config=row[11],
+            allowed_referers=row[12],
         )
         for row in apikey_crud.get_usage_stats(oauth2_info["sub"])
     ]

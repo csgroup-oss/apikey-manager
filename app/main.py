@@ -84,7 +84,7 @@ def get_application() -> FastAPI:
         swagger_ui_init_oauth={
             # we use the value passed by env var instead
             "clientId": "(this value is not used)",
-            "appName": "APIKeyManager",
+            "appName": "API-Key Manager",
             "usePkceWithAuthorizationCodeGrant": True,
             "scopes": "openid profile",
         },

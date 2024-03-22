@@ -72,22 +72,6 @@ LOGGER = logging.getLogger(__name__)
 
 DEBUG = bool(os.environ.get("DEBUG", False))
 
-# Init an admin keycloak connection from the admin client
-try:
-    keycloak_connection = KeycloakOpenIDConnection(
-        server_url=OAUTH2_SERVER_URL,
-        realm_name=OAUTH2_REALM,
-        client_id=OAUTH2_CLIENT_ID,
-        client_secret_key=str(OAUTH2_CLIENT_SECRET),
-        verify=True,
-    )
-    keycloak_admin = KeycloakAdmin(connection=keycloak_connection)
-except KeycloakError as error:
-    raise RuntimeError(
-        f"Error connecting with keycloak to server_url={OAUTH2_SERVER_URL!r}, "
-        f"realm_name={OAUTH2_REALM!r} with client_id={OAUTH2_CLIENT_ID!r}"
-    ) from error
-
 
 class APIKeyCrud:
     """Class handling SQLite connection and writes"""
@@ -116,6 +100,38 @@ class APIKeyCrud:
         )
 
         meta.create_all(self.engine)
+
+        self.keycloak_admin: KeycloakAdmin = None
+
+    def get_keycloak_admin(self):
+        """Init and return an admin keycloak connection from the admin client"""
+
+        # TODO: add a thread lock to be sure to execute only once ?
+
+        if self.keycloak_admin:
+            return self.keycloak_admin
+
+        print(  # TODO use logger # noqa: T201
+            f"Connecting to the keycloak server {OAUTH2_SERVER_URL!r} ..."
+        )
+
+        try:
+            keycloak_connection = KeycloakOpenIDConnection(
+                server_url=OAUTH2_SERVER_URL,
+                realm_name=OAUTH2_REALM,
+                client_id=OAUTH2_CLIENT_ID,
+                client_secret_key=str(OAUTH2_CLIENT_SECRET),
+                verify=True,
+            )
+            self.keycloak_admin = KeycloakAdmin(connection=keycloak_connection)
+            print("Connected to the keycloak server")  # TODO use logger # noqa: T201
+            return self.keycloak_admin
+
+        except KeycloakError as error:
+            raise RuntimeError(
+                f"Error connecting with keycloak to server_url={OAUTH2_SERVER_URL!r}, "
+                f"realm_name={OAUTH2_REALM!r} with client_id={OAUTH2_CLIENT_ID!r}"
+            ) from error
 
     def create_key(
         self,
@@ -271,11 +287,11 @@ class APIKeyCrud:
 
             # Get user info from keycloak
             try:
-                user = keycloak_admin.get_user(user_id)
+                user = self.get_keycloak_admin().get_user(user_id)
                 is_active = user["enabled"]
                 iam_roles = [
                     role["name"]
-                    for role in keycloak_admin.get_realm_roles_of_user(user_id)
+                    for role in self.keycloak_admin.get_realm_roles_of_user(user_id)
                 ]
 
             except KeycloakGetError as error:

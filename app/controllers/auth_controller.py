@@ -62,7 +62,25 @@ def oauth2_endpoint(endpoint: str) -> str:
     return response.json().get(endpoint)
 
 
-authorization_endpoint = oauth2_endpoint("authorization_endpoint")
+authorization_endpoint = None
+
+
+def get_authorization_endpoint():
+    """Init and return the authorization endpoint url."""
+
+    # TODO: add a thread lock to be sure to execute only once ?
+
+    global authorization_endpoint
+    if authorization_endpoint:
+        return authorization_endpoint
+
+    print(  # TODO use logger # noqa: T201
+        f"Connecting to the keycloak server {OAUTH2_METADATA_URL!r} ..."
+    )
+    authorization_endpoint = oauth2_endpoint("authorization_endpoint")
+    print("Connected to the keycloak server")  # TODO use logger # noqa: T201
+    return authorization_endpoint
+
 
 # See: https://developer.zendesk.com/api-reference/sales-crm/authentication/requests/
 # Authorization Code Flow - Three Legged - is the most secure authentication flow,
@@ -103,7 +121,7 @@ async def custom_authorization(request: Request):
 
     # Get request to the authorization url
     return RedirectResponse(
-        f"{authorization_endpoint}?{urllib.parse.urlencode(params)}"  # type: ignore
+        f"{get_authorization_endpoint()}?{urllib.parse.urlencode(params)}"  # type: ignore # noqa: E501
     )
 
 

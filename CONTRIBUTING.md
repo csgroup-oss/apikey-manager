@@ -58,3 +58,19 @@ version is then automatically updated using
   `git tag -a v1.0 -m 'version 1.0'`
 - Push the tags to github: `git push
 --tags`.
+
+### Create and publish the Docker image
+
+We'll need to push the image to a docker registry.
+
+```bash
+# Login
+docker login <your-registry>
+# Example: docker login 643vlk6z.gra7.container-registry.ovh.net
+
+# Tag the image for your registry
+docker build -t 643vlk6z.gra7.container-registry.ovh.net/metis/apikeymanager:<version> .
+
+# Push
+docker push 643vlk6z.gra7.container-registry.ovh.net/metis/apikeymanager:<version>
+```

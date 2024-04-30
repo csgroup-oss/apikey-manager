@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "apikeymanager"
-description = "Proxy service that dynamicaly transform CSV, XML, JSON into valid GeoJson"
+description = "Simple API-Key manager using Keycloak as information provider"
 readme = "README.md"
 keywords = ["apikeymanager", "api-key"]
 license = {text = "Apache-2.0"}
@@ -18,7 +18,8 @@ dependencies = [
     "python-jose",
     "SQLAlchemy",
     "psycopg2_binary",
-    "pydantic_settings"
+    "pydantic_settings",
+    "aiohttp",
 ]
 dynamic = ["version"]
 

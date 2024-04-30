@@ -53,7 +53,7 @@ def get_application() -> FastAPI:
         version="1.0.0",
         contact={
             "name": "Gaudissart Vincent - CS Group",
-            "url": "https://gitlab.si.c-s.fr/space_platforms/sandbox/geojson-proxy",
+            "url": "https://github.com/CS-SI/apikeymanager",
             "email": "support@csgroup.space",
         },
         docs_url="/docs/",

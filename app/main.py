@@ -23,7 +23,7 @@ from fastapi import FastAPI, Request
 from fastapi.logger import logger
 from fastapi.middleware.cors import CORSMiddleware
 
-from .controllers import auth_router, health_router, test_router
+from .controllers import auth_router, health_router
 from .settings import ApiSettings
 from .utils.asyncget import SingletonAiohttp
 
@@ -117,7 +117,7 @@ def get_application() -> FastAPI:
 
     application.include_router(health_router, prefix="/health", tags=["health"])
     application.include_router(auth_router, prefix="/auth", tags=["_auth"])
-    application.include_router(test_router, prefix="/test", tags=["test"])
+    # application.include_router(example_router, prefix="/example", tags=["example"])
 
     return application
 

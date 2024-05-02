@@ -16,7 +16,7 @@
 # limitations under the License.
 
 from .auth_controller import router as auth_router
-from .check_controller import router as check_router
+from .example_controller import router as example_router
 from .health_controller import router as health_router
 
-__all__ = [auth_router, health_router, check_router]
+__all__ = [auth_router, health_router, example_router]

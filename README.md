@@ -23,15 +23,21 @@ The APIKeyManager component offers the following functions:
 
 ### Env vars
 
-| Variable                | Description         | Default value                                                                 |
-| ----------------------- | ------------------- | ----------------------------------------------------------------------------- |
-| ALLOWED_ORIGIN_REGEX    |                     | `.*(geostorm\.eu\|csgroup\.space)`                                            |
-| API_PREFIX              |                     |                                                                               |
-| DEBUG                   | Display SQL request | `False`                                                                       |
-| API_KEYS_DB_URL         |                     | `sqlite:///./test.db`                                                         |
-| API_KEYS_EXPIRE_IN_DAYS |                     | `15`                                                                          |
-| API_KEYS_SHOW_ENDPOINTS |                     | `True`                                                                        |
-| OAUTH2_METADATA_URL     |                     | `https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration` |
+| Variable                       | Description                                                        | Default                 |
+| ------------------------------ | ------------------------------------------------------------------ | ----------------------- |
+| APIKM_NAME                     | Application name                                                   | `"API-Key Manager"`     |
+| APIKM_ROOT_PATH                | API root path                                                      | `""`                    |
+| APIKM_DEBUG                    | DEBUG mode (display SQL queries)                                   | `False`                 |
+| APIKM_CORS_ORIGINS_REGEX       | Allow CORS from (regexp)                                           | `""`                    |
+| APIKM_CORS_ALLOW_METHODS       | Allow CORS for methods                                             | `"GET"`                 |
+| APIKM_DATABASE_URL             | Database to store API Keys                                         | `"sqlite:///./test.db"` |
+| APIKM_DEFAULT_APIKEY_TTL_HOUR  | Default lifetime of an API Key (in hour)                           | `360`                   |
+| APIKM_OIDC_ENDPOINT            | OIDC End Point                                                     | `""`                    |
+| APIKM_OIDC_REALM               | OIDC Realm                                                         | `""`                    |
+| APIKM_OIDC_CLIENT_ID           | OIDC CLient ID                                                     | `""`                    |
+| APIKM_OIDC_CLIENT_SECRET       | OIDC Secret used to sync user info from Keycloak                   | `""`                    |
+| APIKM_KEYCLOAK_SYNC_FREQ       | Sync frequency of a user with data stored in Keycloak (in seconds) | `300`                   |
+| APIKM_SHOW_TECHNICAL_ENDPOINTS | Show technical endoints (health)                                   | `True`                  |
 
 ## Developement
 

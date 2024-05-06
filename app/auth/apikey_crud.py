@@ -55,7 +55,9 @@ class APIKeyCrud:
     """Class handling SQLite connection and writes"""
 
     def __init__(self) -> None:
-        self.engine = create_engine(settings.database_url, echo=settings.debug)
+        self.engine = create_engine(
+            settings.database_url, echo=settings.debug, pool_pre_ping=True
+        )
 
         meta = MetaData()
 
@@ -64,7 +66,7 @@ class APIKeyCrud:
             meta,
             Column("api_key", String, primary_key=True, index=True),
             Column("name", String),
-            Column("user_id", String, index=True),
+            Column("user_id", String, index=True, nullable=False),
             Column("is_active", Boolean, default=True),
             Column("never_expire", Boolean, default=False),
             Column("expiration_date", DateTime),

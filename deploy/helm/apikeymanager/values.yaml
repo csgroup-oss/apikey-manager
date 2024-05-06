@@ -5,14 +5,21 @@
 replicaCount: 1
 
 config:
-  config_file: config.yaml
-  allowed_origin_regex: .*(geostorm\.eu\|csgroup\.space)
-  api_prefix: ""
+  root_path: ""
   debug: false
-  api_keys_db_url: ""
-  api_keys_expire_in_days: 15
-  api_keys_show_endpoints: true
-  oidc_metadata_url: https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration
+  cors_origins_regex: ""
+  cors_allow_methods: "GET"
+  database_url: "sqlite:///./test.db"
+  default_apikey_ttl_hour: 900 # 15 days
+  oidc_endpoint: ""
+  oidc_realm: ""
+  oidc_client_id: ""
+  oidc_client_secret: ""
+  # The client must have have the real_management/view_users
+  # and "implicit" flow privileges.
+  # -1 means no sync
+  keycloak_sync_freq: -1
+  show_technical_endpoints: true
 
 env: []
 

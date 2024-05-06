@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=5"] # , "setuptools_scm[toml]>=7.1"]
+requires = ["setuptools>=5", "setuptools_scm[toml]>=7.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -14,12 +14,12 @@ classifiers = [
 dependencies = [
     "uvicorn[standard]",
     "fastapi",
-    "xmltodict",
     "python-jose",
     "SQLAlchemy",
-    "psycopg2_binary",
     "pydantic_settings",
     "aiohttp",
+    "slowapi",
+    "python-keycloak"
 ]
 dynamic = ["version"]
 
@@ -41,6 +41,10 @@ dev = [
     "requests",
     "twine",
     "pytest-docker"
+]
+
+postgres = [
+    "psycopg2_binary",
 ]
 
 [tool.pytest.ini_options]
@@ -83,4 +87,4 @@ ensure_newline_before_comments = true
 profile = "black"
 
 [tool.check-manifest]
-ignore = [".vscode/*", "*.faas", "Dockerfile"]
+ignore = [".vscode/*", "Dockerfile"]

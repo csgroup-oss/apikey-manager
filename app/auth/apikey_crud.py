@@ -18,10 +18,13 @@
 
 """Interaction with database.
 """
-import os
+import hashlib
+import logging
 import threading
 import uuid
-from datetime import datetime, timedelta
+from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import (
@@ -31,6 +34,7 @@ from sqlalchemy import (
     DateTime,
     Integer,
     MetaData,
+    Row,
     String,
     Table,
     create_engine,
@@ -39,23 +43,19 @@ from sqlalchemy import (
 )
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
+from ..settings import api_settings as settings
+from .keycloak_util import KCUtil
+
+LOGGER = logging.getLogger(__name__)
+
 LIST_API_KEYS = True
-
-# NOTE : use from databases import Database for working with async pg
-# https://fastapi.tiangolo.com/how-to/async-sql-encode-databases/#import-and-set-up-databases
-
-DATABASE_URL = os.environ.get("API_KEYS_DB_URL", "sqlite:///./test.db")
-
-EXPIRATION_LIMIT = int(os.environ.get("API_KEYS_EXPIRE_IN_DAYS", "15"))
-
-DEBUG = bool(os.environ.get("DEBUG", False))
 
 
 class APIKeyCrud:
     """Class handling SQLite connection and writes"""
 
     def __init__(self) -> None:
-        self.engine = create_engine(DATABASE_URL, echo=DEBUG)
+        self.engine = create_engine(settings.database_url, echo=settings.debug)
 
         meta = MetaData()
 
@@ -70,6 +70,7 @@ class APIKeyCrud:
             Column("expiration_date", DateTime),
             Column("latest_query_date", DateTime),
             Column("total_queries", Integer, default=0),
+            Column("latest_sync_date", DateTime),
             Column("iam_roles", JSON, default={}),
             Column("config", JSON, default={}),
             Column("allowed_referers", JSON, default=None),
@@ -77,11 +78,17 @@ class APIKeyCrud:
 
         meta.create_all(self.engine)
 
+        self.kcutil = KCUtil()
+
+    def __hash(self, api_key):
+        return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+
     def create_key(
         self,
         name: str,
         user_id: str,
         never_expire: bool,
+        iam_roles: list[str],
         config: dict,
         allowed_referers: list[str] | None,
     ) -> str:
@@ -89,12 +96,14 @@ class APIKeyCrud:
         with self.engine.connect() as conn:
             conn.execute(
                 self.t_apitoken.insert().values(
-                    api_key=api_key,
+                    api_key=self.__hash(api_key),
                     name=name,
                     user_id=user_id,
                     never_expire=never_expire,
-                    expiration_date=datetime.utcnow()
-                    + timedelta(days=EXPIRATION_LIMIT),
+                    expiration_date=datetime.now(UTC)
+                    + timedelta(hours=settings.default_apikey_ttl_hour),
+                    latest_sync_date=datetime.now(UTC),
+                    iam_roles=iam_roles,
                     config=config,
                     allowed_referers=allowed_referers,
                 )
@@ -103,13 +112,15 @@ class APIKeyCrud:
 
         return api_key
 
-    def renew_key(self, api_key: str, new_expiration_date: str | None) -> str | None:
+    def renew_key(
+        self, user_id: str, api_key: str, new_expiration_date: str | None
+    ) -> str | None:
         with self.engine.connect() as conn:
             t = self.t_apitoken
             resp = conn.execute(
-                select(
-                    t.c["is_active", "total_queries", "expiration_date", "never_expire"]
-                ).where(t.c.api_key == api_key)
+                select(t.c["is_active", "expiration_date"]).where(
+                    (t.c.api_key == self.__hash(api_key)) & (t.c.user_id == user_id)
+                )
             ).first()
 
             # API key not found
@@ -128,8 +139,8 @@ class APIKeyCrud:
 
             # Without an expiration date, we set it here
             if not new_expiration_date:
-                parsed_expiration_date = datetime.utcnow() + timedelta(
-                    days=EXPIRATION_LIMIT
+                parsed_expiration_date = datetime.now(UTC) + timedelta(
+                    hours=settings.default_apikey_ttl_hour
                 )
 
             else:
@@ -145,7 +156,7 @@ class APIKeyCrud:
 
             conn.execute(
                 t.update()
-                .where(t.c.api_key == api_key)
+                .where(t.c.api_key == self.__hash(api_key))
                 .values(is_active=True, expiration_date=parsed_expiration_date)
             )
 
@@ -157,7 +168,7 @@ class APIKeyCrud:
 
             return " ".join(response_lines)
 
-    def revoke_key(self, api_key: str) -> None:
+    def revoke_key(self, user_id: str, api_key: str) -> None:
         """
         Revokes an API key
 
@@ -168,7 +179,9 @@ class APIKeyCrud:
         with self.engine.connect() as conn:
             t = self.t_apitoken
             conn.execute(
-                t.update().where(t.c.api_key == api_key).values(is_active=False)
+                t.update()
+                .where((t.c.api_key == self.__hash(api_key)) & (t.c.user_id == user_id))
+                .values(latest_sync_date=datetime.now(UTC), is_active=False)
             )
 
             conn.commit()
@@ -183,46 +196,78 @@ class APIKeyCrud:
 
         with self.engine.connect() as conn:
             t = self.t_apitoken
-            response = conn.execute(
-                select(t.c["iam_roles", "config"]).where(
-                    (t.c.api_key == api_key)
-                    & t.c.is_active
-                    & (t.c.never_expire | (t.c.expiration_date > datetime.utcnow()))
+            row = conn.execute(
+                select(
+                    t.c[
+                        "user_id",
+                        "is_active",
+                        "iam_roles",
+                        "config",
+                        "latest_sync_date",
+                    ]
+                ).where(
+                    (t.c.api_key == self.__hash(api_key))
+                    & (t.c.never_expire | (t.c.expiration_date > datetime.now(UTC)))
                 )
             ).first()
 
-            if not response:
+            if not row:
+                # If the apikey is expired, directly return None
                 return None
-            else:
-                # The key is valid
 
-                # We run the logging in a separate thread as writing takes some time
-                threading.Thread(
-                    target=self._update_usage,
-                    args=(api_key,),
-                ).start()
+            response = row._asdict()
+            latest_sync_date = response["latest_sync_date"]
+            # SQLite does not store timezone. Small warkaround
+            if latest_sync_date.utcoffset() is None:
+                latest_sync_date = latest_sync_date.replace(tzinfo=timezone.utc)
 
-                # We return directly
-                return response._asdict()
+            if settings.keycloak_sync_freq > 0 and datetime.now(UTC) > (
+                latest_sync_date + timedelta(seconds=settings.keycloak_sync_freq)
+            ):
+                LOGGER.debug(f"Sync user info of `{response['user_id']}` with KeyCLoak")
+                kc_info = self.kcutil.get_user_info(response["user_id"])
+                # Update the database
+                conn.execute(
+                    t.update()
+                    .where(t.c.api_key == self.__hash(api_key))
+                    .values(
+                        is_active=kc_info.is_enabled,
+                        iam_roles=kc_info.roles,
+                        latest_sync_date=datetime.now(UTC),
+                    )
+                )
+                conn.commit()
+
+                response["is_active"] = kc_info.is_enabled
+                response["iam_roles"] = kc_info.roles
+
+            if not response["is_active"]:
+                # If user is not active anymore
+                return None
+
+            # We run the logging in a separate thread as writing takes some time
+            threading.Thread(
+                target=self._update_usage,
+                args=(api_key,),
+            ).start()
+
+            # We return directly
+            return response
 
     def _update_usage(self, api_key: str) -> None:
         with self.engine.connect() as conn:
             t = self.t_apitoken
             conn.execute(
                 t.update()
-                .where(t.c.api_key == api_key)
+                .where(t.c.api_key == self.__hash(api_key))
                 .values(
                     total_queries=t.c.total_queries + 1,
-                    latest_query_date=datetime.utcnow(),
+                    latest_query_date=datetime.now(UTC),
                 )
             )
             conn.commit()
 
-    def get_usage_stats(
-        self, user_id: str
-    ) -> list[
-        tuple[str, str, str, bool, bool, datetime, datetime, int, dict, dict, dict]
-    ]:
+    def get_usage_stats(self, user_id: str) -> Sequence[Row[Any]]:
         """
         Returns usage stats for all API keys
 

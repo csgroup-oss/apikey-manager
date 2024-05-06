@@ -31,31 +31,45 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:          
-            - name: "CONFIG_FILE"
-              value: {{  .Values.config.config_file }}
-            - name: "API_PREFIX"
-              value: {{  .Values.config.api_prefix }}
-            - name: "DEBUG"
+            - name: "APIKM_ROOT_PATH"
+              value: {{  .Values.config.root_path }}
+            - name: "APIKM_DEBUG"
               value: {{  .Values.config.debug | quote }}
-            - name: "API_KEYS_EXPIRE_IN_DAYS"
-              value: {{  .Values.config.api_keys_expire_in_days | quote }}
-            - name: "API_KEYS_SHOW_ENDPOINTS"
-              value: {{  .Values.config.api_keys_show_endpoints | quote }}
-            - name: "ALLOWED_ORIGIN_REGEX"
+            - name: "APIKM_CORS_ORIGINS_REGEX"
+              value: {{  .Values.config.cors_origins_regex | quote }}    
+            - name: "APIKM_CORS_ALLOW_METHODS"
+              value: {{  .Values.config.cors_allow_methods | quote }}
+            - name: "APIKM_DATABASE_URL"
               valueFrom:
                 secretKeyRef:
-                  key:  allowed_origin_regex
+                  key:  database_url
                   name: {{ .Release.Name }}-auth
-            - name: "API_KEYS_DB_URL"
+            - name: "APIKM_DEFAULT_APIKEY_TTL_HOUR"
+              value: {{  .Values.config.default_apikey_ttl_hour | quote }}
+            - name: "APIKM_OIDC_ENDPOINT"
               valueFrom:
                 secretKeyRef:
-                  key:  api_keys_db_url
+                  key:  oidc_endpoint
                   name: {{ .Release.Name }}-auth
-            - name: "OAUTH2_METADATA_URL"
+            - name: "APIKM_OIDC_REALM"
               valueFrom:
                 secretKeyRef:
-                  key:  oidc_metadata_url
+                  key:  oidc_realm
                   name: {{ .Release.Name }}-auth
+            - name: "APIKM_OIDC_CLIENT_ID"
+              valueFrom:
+                secretKeyRef:
+                  key:  oidc_client_id
+                  name: {{ .Release.Name }}-auth
+            - name: "APIKM_OIDC_CLIENT_SECRET"
+              valueFrom:
+                secretKeyRef:
+                  key:  oidc_client_secret
+                  name: {{ .Release.Name }}-auth
+            - name: "APIKM_KEYCLOAK_SYNC_FREQ"
+              value: {{  .Values.config.keycloak_sync_freq | quote }}
+            - name: "APIKM_SHOW_TECHNICAL_ENDPOINTS"
+              value: {{  .Values.config.show_technical_endpoints | quote }}
           {{- range $key, $val := .Values.env }}
             - name: {{ $key }}
               value: {{ $val | quote }}
@@ -66,11 +80,11 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
+              path: /health/status
               port: http
           readinessProbe:
             httpGet:
-              path: /
+              path: /health/status
               port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

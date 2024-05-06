@@ -27,7 +27,7 @@ LOGGER = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/test")
 def some_test(
     request: Request, api_key_info: Annotated[dict, Depends(api_key_security)]
 ):

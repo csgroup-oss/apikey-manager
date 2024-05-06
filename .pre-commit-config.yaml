@@ -66,5 +66,6 @@ repos:
 exclude: |
   (?x)^(
       deploy/.*|
-      tests/.*
+      tests/.*|
+      \.vscode/.*
   )$

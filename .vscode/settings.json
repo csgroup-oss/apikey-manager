@@ -1,0 +1,21 @@
+{
+    "python.formatting.provider": "black",
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./test",
+        "-p",
+        "test_*.py"
+    ],
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "flake8.args": [
+        "--config=setup.cfg"
+    ],
+    "flake8.importStrategy": "fromEnvironment",
+    "python.analysis.autoFormatStrings": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.downloadStubs": true,
+    "python.analysis.inlayHints.pytestParameters": true,
+    "python.testing.promptToConfigure": false
+}

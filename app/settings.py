@@ -15,27 +15,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Callable
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 
 class ApiSettings(BaseSettings):
     """FASTAPI application settings."""
 
     name: str = "API-Key Manager"
+    root_path: str = ""
+    debug: bool = False
     cors_origins_regex: str = ".*"  # r".*(geostorm\.eu|csgroup\.space)"
     cors_allow_methods: str = "GET"
-    cachecontrol: str = "public, max-age=3600"
-    root_path: str = ""
-    debug: bool = True
 
-    disable_cog: bool = False
-    disable_stac: bool = False
-    disable_mosaic: bool = False
+    database_url: str = "sqlite:///./test.db"
+    default_apikey_ttl_hour: int = 15 * 24  # in hour
 
-    lower_case_query_parameters: bool = False
+    oidc_endpoint: str = ""
+    oidc_realm: str = ""
+    oidc_client_id: str = ""
 
-    model_config = SettingsConfigDict(env_prefix="GEOJSONPROXY_", env_file=".env")
+    # Admin client id and secret used for oauth2 operations.
+    # The client must have have the real_management/view_users
+    # and "implicit" flow privileges.
+    #  -1 means no sync
+    keycloak_sync_freq: int = 5 * 60
+    oidc_client_secret: str = ""
+
+    # Show endpoints in the openapi swagger ?
+    show_technical_endpoints: bool = False
+
+    auth_function: Callable | None = None
+
+    model_config = SettingsConfigDict(env_prefix="APIKM_", env_file=".env")
 
     @field_validator("cors_allow_methods")
     def parse_cors_allow_methods(cls, v):
@@ -46,3 +62,17 @@ class ApiSettings(BaseSettings):
     def parse_root_path(cls, v):
         """Parse root path"""
         return v.rstrip("/")
+
+    @property
+    def oidc_metadata_url(self):
+        return (
+            self.oidc_endpoint
+            + "/realms/"
+            + self.oidc_realm
+            + "/.well-known/openid-configuration"
+        )
+
+
+api_settings = ApiSettings()
+
+rate_limiter = Limiter(key_func=get_remote_address)

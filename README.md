@@ -69,7 +69,7 @@ python -m pytest
 ### Run with uvicorn
 
 ```bash
-uvicorn app.main:app --host localhost --port 9999 --reload
+uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_config.yaml
 ```
 
 You can check the API docs at [localhost:9999](http://localhost:9999/docs/).
@@ -86,11 +86,23 @@ Use it
 
 ```bash
 docker run --name apikeymanager --rm \
-    -p 8000:8000 \
+    -e APIKM_OIDC_ENDPOINT='' \
+    -e APIKM_OIDC_REALM='' \
+    -e APIKM_OIDC_CLIENT_ID='' \
+    -e APIKM_OIDC_CLIENT_SECRET='' \
+    -p 9999:8000 \
     apikeymanager:latest
 ```
 
 You can check the API docs at [localhost:8000](http://localhost:8000/docs).
+
+### Publish the Docker image to the Image repository
+
+```bash
+docker image tag apikeymanager:latest 643vlk6z.gra7.container-registry.ovh.net/metis/apikeymanager:latest
+
+docker push 643vlk6z.gra7.container-registry.ovh.net/metis/apikeymanager:latest
+```
 
 ### HELM
 
@@ -99,13 +111,19 @@ Create a robot account in the harbor interface to access GeoJson Proxy Image
 ```bash
 kubectl create namespace apikeymanager
 
-kubectl create secret docker-registry regcred --docker-username='xxxxxxx' --docker-password='yyyyyyyyyyy' --docker-server='643vlk6z.gra7.container-registry.ovh.net' --namespace apikeymanager
+kubectl create secret docker-registry regcred --docker-username='<LOGIN>' --docker-password='<PASSWORD>' --docker-server='643vlk6z.gra7.container-registry.ovh.net' --namespace apikeymanager
 ```
 
 Deploy APIKey Manager
 
 ```bash
 helm upgrade --install apikeymanager ./deploy/helm/apikeymanager --namespace apikeymanager --values deploy/helm/values.yaml
+```
+
+Remove APIKey Manager
+
+```bash
+helm delete apikeymanager --namespace apikeymanager
 ```
 
 ## Copyright and License

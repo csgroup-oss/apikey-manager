@@ -16,27 +16,19 @@
 # limitations under the License.
 
 import re
-from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from collections.abc import Callable
 
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.logger import logger
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-from .controllers import auth_router, health_router
-from .settings import ApiSettings
-from .utils.asyncget import SingletonAiohttp
+from .controllers import auth_router, example_router, health_router
+from .settings import api_settings, rate_limiter
 
 fastAPI_logger = logger  # convenient name
-
-api_settings = ApiSettings()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator:
-    SingletonAiohttp.get_aiohttp_client()
-    yield
-    await SingletonAiohttp.close_aiohttp_client()
 
 
 def get_application() -> FastAPI:
@@ -52,18 +44,17 @@ def get_application() -> FastAPI:
         description="APIKeyManager is a centralized Python-oriented API Key manager.",
         version="1.0.0",
         contact={
-            "name": "Gaudissart Vincent - CS Group",
+            "name": "CS Group France",
             "url": "https://github.com/CS-SI/apikeymanager",
             "email": "support@csgroup.space",
         },
         docs_url="/docs/",
         root_path=api_settings.root_path,
         openapi_tags=tags_metadata,
-        lifespan=lifespan,
         redoc_url=None,
         swagger_ui_init_oauth={
-            "clientId": "fastapi_test",
-            "appName": "Doc Tools",
+            "clientId": api_settings.oidc_client_id,
+            "appName": api_settings.name,
             "usePkceWithAuthorizationCodeGrant": True,
             "scopes": "openid profile",
         },
@@ -115,11 +106,28 @@ def get_application() -> FastAPI:
         allow_headers=["*"],
     )
 
-    application.include_router(health_router, prefix="/health", tags=["health"])
-    application.include_router(auth_router, prefix="/auth", tags=["_auth"])
-    # application.include_router(example_router, prefix="/example", tags=["example"])
+    # Set and configure rate limiter
+    application.state.limiter = rate_limiter
+    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+    application.include_router(auth_router, prefix="/auth", tags=["Manage API keys"])
+    application.include_router(
+        health_router,
+        prefix="/health",
+        tags=["Health"],
+        include_in_schema=api_settings.show_technical_endpoints,
+    )
+    if api_settings.debug:
+        application.include_router(
+            example_router,
+            prefix="/example",
+            tags=["Example of protected service"],
+            include_in_schema=api_settings.show_technical_endpoints,
+        )
     return application
 
 
 app = get_application()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=9999, log_config="log_config.yaml")

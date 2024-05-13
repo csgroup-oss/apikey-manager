@@ -1,10 +1,10 @@
 # Contribute
 
-Thank you for considering contributing to APIKeyManager!
+Thank you for considering contributing to API-Key Manager!
 
 ## Report issues
 
-Issue tracker: <https://github.com/CS-SI/apikeymanager/issues>
+Issue tracker: <https://github.com/csgroup-oss/apikey-manager/>
 
 Please check that a similar issue does not already exist and include the
 following information in your post:
@@ -25,8 +25,8 @@ following information in your post:
 If you intend to contribute to eodag source code:
 
 ```bash
-git clone https://github.com/CS-SI/apikeymanager.git
-cd apikeymanager
+git clone https://github.com/csgroup-oss/apikey-manager.git
+cd apikey-manager
 python -m pip install -e .[dev] --no-cache-dir
 pre-commit install
 ```

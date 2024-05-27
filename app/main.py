@@ -140,6 +140,13 @@ def get_application() -> FastAPI:
     application.state.limiter = rate_limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+    # NOTE: we prefix by URL_PREFIX the endpoints that we want to expose
+    # to the internet.
+    # When deployed, Ingress is used to redirect requests to this prefix.
+    # We do not prefix the technical endpoints because we don't want to
+    # expose them to the internet.
+    # TODO: discuss it with Vincent.
+
     application.include_router(
         auth_router,
         prefix=f"{URL_PREFIX}{auth_router_prefix}",

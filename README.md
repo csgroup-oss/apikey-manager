@@ -23,6 +23,14 @@ The APIKeyManager component offers the following functions:
 
 ![Architecture](docs/Architecture.png)
 
+### Create API Key workflow
+
+![Create API Key](docs/CreateAPIKEY.png)
+
+### Use API Key workflow
+
+![Use API KEy](docs/UseAPIKEY.png)
+
 ## Usage
 
 ### Quickstart
@@ -52,13 +60,9 @@ uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_conf
 | APIKM_KEYCLOAK_SYNC_FREQ       | Sync frequency of a user with data stored in Keycloak (in seconds) | `300`                   |
 | APIKM_SHOW_TECHNICAL_ENDPOINTS | Show technical endoints (health)                                   | `True`                  |
 
-### Create API Key workflow
+### Endpoints
 
-![Create API Key](docs/CreateAPIKEY.png)
-
-### Use API Key workflow
-
-![Use API KEy](docs/UseAPIKEY.png)
+![Endpoints](docs/Endpoints.png)
 
 ## Developement
 

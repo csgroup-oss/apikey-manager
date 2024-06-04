@@ -19,7 +19,20 @@ The APIKeyManager component offers the following functions:
 - _SSO rights synchronization_: APIKeyManager enables you to retrieve the user's Keycloak rights, and synchronize them with the key's rights. If the user is deactivated in Keycloak, his API keys are automatically revoked after a given time, even if their expiry date has not been reached. Groups are also synchronized, to provide information to the underlying services if necessary.
 - _Security_: Protection of key verification APIs against brute-force attacks, management of keys requiring OIDC authentication.
 
+## Architecture
+
+![Architecture](docs/Architecture.png)
+
 ## Usage
+
+### Quickstart
+
+```bash
+virtualenv -p python3.11 venv
+source venv/bin/activate
+pip install -e . --no-cache-dir
+uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_config.yaml
+```
 
 ### Env vars
 
@@ -38,6 +51,14 @@ The APIKeyManager component offers the following functions:
 | APIKM_OIDC_CLIENT_SECRET       | OIDC Secret used to sync user info from Keycloak                   | `""`                    |
 | APIKM_KEYCLOAK_SYNC_FREQ       | Sync frequency of a user with data stored in Keycloak (in seconds) | `300`                   |
 | APIKM_SHOW_TECHNICAL_ENDPOINTS | Show technical endoints (health)                                   | `True`                  |
+
+### Create API Key workflow
+
+![Create API Key](docs/CreateAPIKEY.png)
+
+### Use API Key workflow
+
+![Use API KEy](docs/UseAPIKEY.png)
 
 ## Developement
 

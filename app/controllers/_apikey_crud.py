@@ -268,6 +268,10 @@ class APIKeyCrud:
         from the keycloak user information
         """
 
+        # For now disable this,
+        # see: https://pforge-exchange2.astrium.eads.net/jira/browse/RSPY-292
+        return
+
         with self.engine.connect() as conn:
             t = self.t_apitoken
 

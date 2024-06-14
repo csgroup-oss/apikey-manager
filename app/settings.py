@@ -15,13 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
+
 from collections.abc import Callable
+from typing import Any
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+
+
+@dataclass
+class AuthInfo:
+    user_id: str
+    roles: list[str]
 
 class ApiSettings(BaseSettings):
     """FASTAPI application settings."""
@@ -48,6 +57,10 @@ class ApiSettings(BaseSettings):
 
     # Show endpoints in the openapi swagger ?
     show_technical_endpoints: bool = False
+
+    # Use the OpenIdConnect authentication ? True by default.
+    # If False: use the authlib OAuth authentication instead.
+    use_oidc: bool = True
 
     auth_function: Callable | None = None
 

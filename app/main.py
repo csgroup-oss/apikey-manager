@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from .auth import authlib_oauth
 from .controllers import auth_router, example_router, health_router
 from .settings import api_settings, rate_limiter
 
@@ -117,6 +118,22 @@ def get_application() -> FastAPI:
         tags=["Health"],
         include_in_schema=api_settings.show_technical_endpoints,
     )
+
+    # Don't use the OpenIdConnect authentication. 
+    # Use the authlib OAuth authentication instead.
+    if not api_settings.use_oidc:
+
+        authlib_oauth.init(application)
+
+        # authlib_oauth_router = authlib_oauth.init(application)
+
+        # application.include_router(
+        #     authlib_oauth_router,
+        #     prefix=authlib_oauth.PREFIX,
+        #     tags=["authlib OAuth"],
+        #     include_in_schema=True,
+        # )
+
     if api_settings.debug:
         application.include_router(
             example_router,

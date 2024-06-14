@@ -17,7 +17,6 @@
 
 
 import logging
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Annotated
 
@@ -30,8 +29,9 @@ from pydantic import BaseModel, Json
 from pydantic.json_schema import SkipJsonSchema
 from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
 
+from ..auth import authlib_oauth
 from ..auth.apikey_crud import apikey_crud
-from ..settings import api_settings, rate_limiter
+from ..settings import AuthInfo, api_settings, rate_limiter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,48 +42,46 @@ LOGGER = logging.getLogger(__name__)
 
 router = APIRouter()
 
+if api_settings.use_oidc:
 
-oidc = OpenIdConnect(openIdConnectUrl=api_settings.oidc_metadata_url)
+    oidc = OpenIdConnect(openIdConnectUrl=api_settings.oidc_metadata_url)
 
-public_key_cache: tuple[datetime, tuple[str, str]] | None = None
-
-
-@dataclass
-class AuthInfo:
-    user_id: str
-    roles: list[str]
+    public_key_cache: tuple[datetime, tuple[str, str]] | None = None
 
 
-async def get_issuer_and_public_key() -> tuple[str, str]:
-    global public_key_cache
+    async def get_issuer_and_public_key() -> tuple[str, str]:
+        global public_key_cache
 
-    if not public_key_cache or public_key_cache[0] < datetime.now():
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api_settings.oidc_metadata_url) as resp:
-                issuer = (await resp.json()).get("issuer")
-            async with session.get(issuer) as resp:
-                public_key = (await resp.json()).get("public_key")
+        if not public_key_cache or public_key_cache[0] < datetime.now():
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_settings.oidc_metadata_url) as resp:
+                    issuer = (await resp.json()).get("issuer")
+                async with session.get(issuer) as resp:
+                    public_key = (await resp.json()).get("public_key")
 
-        key = "-----BEGIN PUBLIC KEY-----\n" + public_key + "\n-----END PUBLIC KEY-----"
-        public_key_cache = (datetime.now() + timedelta(days=1), (issuer, key))
+            key = "-----BEGIN PUBLIC KEY-----\n" + public_key + "\n-----END PUBLIC KEY-----"
+            public_key_cache = (datetime.now() + timedelta(days=1), (issuer, key))
 
-    return public_key_cache[1]
+        return public_key_cache[1]
 
 
-async def oidc_auth(token: str | None = Depends(oidc)) -> AuthInfo:
-    if not token:
-        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Not authenticated")
-    try:
-        issuer, key = await get_issuer_and_public_key()
-        if token.startswith("Bearer "):
-            token = token[7:]  # remove the "Bearer " header
+    async def oidc_auth(token: str | None = Depends(oidc)) -> AuthInfo:
+        if not token:
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Not authenticated")
+        try:
+            issuer, key = await get_issuer_and_public_key()
+            if token.startswith("Bearer "):
+                token = token[7:]  # remove the "Bearer " header
 
-        decoded = jwt.decode(
-            token, key=key, issuer=issuer, audience=api_settings.oidc_client_id
-        )
-        return AuthInfo(decoded.get("sub"), decoded.get("roles"))
-    except JOSEError as e:
-        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
+            decoded = jwt.decode(
+                token, key=key, issuer=issuer, audience=api_settings.oidc_client_id
+            )
+            return AuthInfo(decoded.get("sub"), decoded.get("roles"))
+        except JOSEError as e:
+            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
+        
+else:
+    oidc_auth = authlib_oauth.auth
 
 
 async def main_auth():

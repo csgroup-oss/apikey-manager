@@ -44,11 +44,9 @@ router = APIRouter()
 
 # Use the OpenIdConnect authentication
 if not api_settings.use_authlib_oauth:
-
     oidc = OpenIdConnect(openIdConnectUrl=api_settings.oidc_metadata_url)
 
     public_key_cache: tuple[datetime, tuple[str, str]] | None = None
-
 
     async def get_issuer_and_public_key() -> tuple[str, str]:
         global public_key_cache
@@ -60,15 +58,20 @@ if not api_settings.use_authlib_oauth:
                 async with session.get(issuer) as resp:
                     public_key = (await resp.json()).get("public_key")
 
-            key = "-----BEGIN PUBLIC KEY-----\n" + public_key + "\n-----END PUBLIC KEY-----"
+            key = (
+                "-----BEGIN PUBLIC KEY-----\n"
+                + public_key
+                + "\n-----END PUBLIC KEY-----"
+            )
             public_key_cache = (datetime.now() + timedelta(days=1), (issuer, key))
 
         return public_key_cache[1]
 
-
     async def oidc_auth(token: str | None = Depends(oidc)) -> AuthInfo:
         if not token:
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Not authenticated")
+            raise HTTPException(
+                status_code=HTTP_403_FORBIDDEN, detail="Not authenticated"
+            )
         try:
             issuer, key = await get_issuer_and_public_key()
             if token.startswith("Bearer "):
@@ -81,9 +84,10 @@ if not api_settings.use_authlib_oauth:
         except JOSEError as e:
             raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
 
+
 # Use the authlib OAuth authentication
 else:
-    oidc_auth = authlib_oauth.authlib_oauth
+    oidc_auth = authlib_oauth.authlib_oauth  # type: ignore
 
 
 async def main_auth():

@@ -1,14 +1,11 @@
-from authlib.integrations.base_client.errors import MismatchingStateError
-
 # from fastapi.security import OAuth2AuthorizationCodeBearer
 from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.starlette_client.apps import StarletteOAuth2App
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
+from fastapi import APIRouter, FastAPI, HTTPException, status
 from fastapi.openapi.docs import get_swagger_ui_html
 from starlette.config import Config
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
 
 from ..settings import AuthInfo, api_settings
 from .keycloak_util import KCUtil
@@ -52,72 +49,45 @@ def init(app: FastAPI) -> APIRouter:
     )
 
     @router.get("/docs", include_in_schema=False)
-    async def custom_swagger_ui_html(request: Request):
+    async def docs(request: Request):
         """
         Override the Swagger /docs endpoint so the user must login with keycloak
         before displaying the Swagger UI.
         """
+        nonlocal app
+        ui_title = app.title + " - Swagger UI"
+
         # If the user is already logged in, do nothing, just display the Swagger UI.
         if request.session.get("user"):
-            nonlocal app
-            return get_swagger_ui_html(
-                openapi_url=app.openapi_url, title=app.title + " - Swagger UI"
-            )
+            return get_swagger_ui_html(openapi_url=app.openapi_url, title=ui_title)
 
-        # Else log the user in
-        return RedirectResponse(url="/login")
+        # Code and state coming from keycloak
+        code = request.query_params.get("code")
+        state = request.query_params.get("state")
 
-    @router.get("/login", include_in_schema=False)
-    async def login(request: Request):
-        """
-        Login with keycloak.
-        NOTE: Don't call this endpoint from Swagger, it won't work because of the
-        redirection to keycloak.
-        """
-        # If the user is already logged in, we redirect to /docs
-        # to display the Swagger UI.
-        if request.session.get("user"):
-            return RedirectResponse(url="/docs")
+        # If they are not set, then we need to call keycloak,
+        # which then will call again this endpiont.
+        if (not code) and (not state):
+            redirect_uri = request.url_for("docs")
+            return await keycloak.authorize_redirect(request, redirect_uri)
 
-        # Else do the authentication with keycloak.
-        # We redirect to the /auth endpoint implemented below.
-        redirect_uri = request.url_for("auth")
-        return await keycloak.authorize_redirect(request, redirect_uri)
-
-    @router.get("/auth", include_in_schema=False)
-    async def auth(request: Request):
-        """
-        NOTE: don't call this endpoint directly.
-        It is called by the /login endpoint.
-        """
-
-        # With the OAuth2 authentication, the endpoint /login calls keycloak which
-        # then call /auth. We save the user information received from keycloak.
-        try:
-            token = await keycloak.authorize_access_token(request)
-        except MismatchingStateError:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "msg": "This is a bug from Chome. "
-                    "Try in a private window or with Firefox."
-                },
-            )
-
+        # Else we are called from keycloak.
+        # We save the user information received from keycloak.
+        #
+        # NOTE: in case of MismatchingStateError, normally this should not happen
+        # anymore. It may be a bug in Chrome linked to:
+        # https://github.com/encode/starlette/issues/2019
+        token = await keycloak.authorize_access_token(request)
         userinfo = dict(token["userinfo"])
         request.session["user"] = userinfo
 
-        # Then we redirect to /docs to display the Swagger UI.
-        return RedirectResponse(url="/docs")
+        # Display the Swagger UI
+        return get_swagger_ui_html(openapi_url=app.openapi_url, title=ui_title)
 
     @router.get("/logout")
     async def logout(request: Request):
         request.session.pop("user", None)
         return {"msg": "Logged out"}
-
-    @router.get("/protected", include_in_schema=api_settings.show_technical_endpoints)
-    async def protected_route(user: dict = Depends(authlib_oauth)):
-        return {"msg": "You are logged in", "user": user}
 
     return router
 

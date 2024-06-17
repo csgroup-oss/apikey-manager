@@ -58,9 +58,9 @@ class ApiSettings(BaseSettings):
     # Show endpoints in the openapi swagger ?
     show_technical_endpoints: bool = False
 
-    # Use the OpenIdConnect authentication ? True by default.
-    # If False: use the authlib OAuth authentication instead.
-    use_oidc: bool = True
+    # If False (default): use the OpenIdConnect authentication.
+    # If True: use the authlib OAuth authentication instead.
+    use_authlib_oauth: bool = True
 
     auth_function: Callable | None = None
 

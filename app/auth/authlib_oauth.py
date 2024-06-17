@@ -7,9 +7,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from fastapi.openapi.docs import get_swagger_ui_html
+from authlib.integrations.base_client.errors import MismatchingStateError
 import os
-# from collections.abc import AsyncIterator
-# from contextlib import asynccontextmanager
+from .keycloak_util import KCUtil
  
 from fastapi import FastAPI
 # from fastapi.logger import logger
@@ -48,57 +48,76 @@ def init(app: FastAPI) -> APIRouter:
             'scope': 'openid profile email',
         },
     )
+ 
+    @router.get("/docs", include_in_schema=False)
+    async def custom_swagger_ui_html(request: Request):
+        """
+        Override the Swagger /docs endpoint so the user must login with keycloak 
+        before displaying the Swagger UI.
+        """
+        # If the user is already logged in, do nothing, just display the Swagger UI.
+        if request.session.get('user'):
+            nonlocal app
+            return get_swagger_ui_html(openapi_url=app.openapi_url, title=app.title + " - Swagger UI")
+        
+        # Else log the user in
+        return RedirectResponse(url='/login')
     
-    def get_current_user(request: Request):
-        user = request.session.get('user')
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authenticated"
-            )
-        return user
-    
-    @app.get('/login')
+    @router.get('/login', include_in_schema=False)
     async def login(request: Request):
-
-        if "user" in request.session:
-            return {"user": request.session['user']}
-    
-        redirect_uri = request.url_for(f'{PREFIX}auth')
+        """
+        Login with keycloak.
+        NOTE: Don't call this endpoint from Swagger, it won't work because of the redirection to keycloak.
+        """
+        # If the user is already logged in, we redirect to /docs to display the Swagger UI.
+        if request.session.get('user'):
+            return RedirectResponse(url='/docs')
+        
+        # Else do the authentication with keycloak.
+        # We redirect to the /auth endpoint implemented below.
+        redirect_uri = request.url_for("auth") 
         return await keycloak.authorize_redirect(request, redirect_uri)
     
-    @app.get('/auth')
+    @router.get('/auth', include_in_schema=False)
     async def auth(request: Request):
-        token = await keycloak.authorize_access_token(request)
+        """NOTE: don't call this endpoint directly. It is called by the /login endpoint."""
+
+        # With the OAuth2 authentication, the endpoint /login calls keycloak which then call /auth.
+        # We save the user information received from keycloak.
+        try:
+            token = await keycloak.authorize_access_token(request)
+        except MismatchingStateError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"msg": f"This is a bug from Chome. Try in a private window or with Firefox."})
+
         userinfo = dict(token['userinfo'])
         request.session['user'] = userinfo
-        return {'token': token, 'user': userinfo}
+
+        # Then we redirect to /docs to display the Swagger UI.
+        return RedirectResponse(url='/docs')
     
-    # TODO: keep ?
-    @app.get('/logout')
+    @router.get('/logout')
     async def logout(request: Request):
         request.session.pop('user', None)
         return {'msg': 'Logged out'}
     
-    @app.get('/protected')
-    async def protected_route(user: dict = Depends(get_current_user )):
-        if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    @router.get('/protected', include_in_schema=api_settings.show_technical_endpoints)
+    async def protected_route(user: dict = Depends(authlib_oauth)):
         return {'msg': 'You are logged in', 'user': user}
     
-    # @router.get("/docs", include_in_schema=False)
-    # async def custom_swagger_ui_html(request: Request):
-    #     user = request.session.get('user')
-    #     if not user:
-    #         return RedirectResponse(url='/login')
-    #     return get_swagger_ui_html(openapi_url=app.openapi_url, title=app.title + " - Swagger UI")
-
     return router
 
-async def auth(request: Request) -> AuthInfo:
+kcutil = KCUtil()
 
-    token = await keycloak.authorize_access_token(request)
-    userinfo = dict(token['userinfo'])
-    request.session['user'] = userinfo
-    return {'token': token, 'user': userinfo}
-
+async def authlib_oauth(request: Request) -> AuthInfo:
+        
+    user = request.session.get('user')
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail={"msg": f"You are not logged in. Refresh this page with F5 to log in or go to: {request.base_url}docs"})
+    
+    user_id = user.get("sub")
+    keycloak_user_info = kcutil.get_user_info(user_id)
+    return AuthInfo(user_id, keycloak_user_info.roles)

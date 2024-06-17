@@ -42,7 +42,8 @@ LOGGER = logging.getLogger(__name__)
 
 router = APIRouter()
 
-if api_settings.use_oidc:
+# Use the OpenIdConnect authentication
+if not api_settings.use_authlib_oauth:
 
     oidc = OpenIdConnect(openIdConnectUrl=api_settings.oidc_metadata_url)
 
@@ -79,9 +80,10 @@ if api_settings.use_oidc:
             return AuthInfo(decoded.get("sub"), decoded.get("roles"))
         except JOSEError as e:
             raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
-        
+
+# Use the authlib OAuth authentication
 else:
-    oidc_auth = authlib_oauth.auth
+    oidc_auth = authlib_oauth.authlib_oauth
 
 
 async def main_auth():

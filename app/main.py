@@ -49,7 +49,12 @@ def get_application() -> FastAPI:
             "url": "https://github.com/csgroup-oss/apikey-manager/",
             "email": "support@csgroup.space",
         },
-        docs_url="/docs/",
+
+        # If we use the authlib OAuth authentication, we override the /docs endpoint.
+        # Here we must pass None so the URLs /docs and /docs/ (with a trailing slash) 
+        # are both redirected to our endpoint.
+        docs_url=None if api_settings.use_authlib_oauth else "/docs/",
+
         root_path=api_settings.root_path,
         openapi_tags=tags_metadata,
         redoc_url=None,
@@ -121,18 +126,16 @@ def get_application() -> FastAPI:
 
     # Don't use the OpenIdConnect authentication. 
     # Use the authlib OAuth authentication instead.
-    if not api_settings.use_oidc:
+    if api_settings.use_authlib_oauth:
+        
+        authlib_oauth_router = authlib_oauth.init(application)
 
-        authlib_oauth.init(application)
-
-        # authlib_oauth_router = authlib_oauth.init(application)
-
-        # application.include_router(
-        #     authlib_oauth_router,
-        #     prefix=authlib_oauth.PREFIX,
-        #     tags=["authlib OAuth"],
-        #     include_in_schema=True,
-        # )
+        application.include_router(
+            authlib_oauth_router,
+            prefix=authlib_oauth.PREFIX,
+            tags=["authlib OAuth"],
+            include_in_schema=True,
+        )
 
     if api_settings.debug:
         application.include_router(

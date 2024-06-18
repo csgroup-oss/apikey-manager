@@ -25,12 +25,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from .controllers import auth_router, example_router, health_router
+from . import settings
+from .controllers import auth_router, authlib_oauth, example_router, health_router
 from .controllers.auth_controller import router_prefix as auth_router_prefix
-from .settings import (
+from .settings import (  # URL_PREFIX,
     SHOW_APIKEY_ENDPOINTS,
     SHOW_TECHNICAL_ENDPOINTS,
-    URL_PREFIX,
     ApiSettings,
     rate_limiter,
 )
@@ -51,35 +51,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator:
 def get_application() -> FastAPI:
     # For cluster deployment: override the swagger /docs URL from an environment
     # variable. Also set the openapi.json URL under the same path.
-    if URL_PREFIX:
-        docs_url = URL_PREFIX.strip("/")
-        docs_params = {
-            "docs_url": f"/{docs_url}",
-            "openapi_url": f"/{docs_url}/openapi.json",
-        }
-    else:
-        docs_params = {}
+    # if URL_PREFIX:
+    #     docs_url = URL_PREFIX.strip("/")
+    #     docs_params = {
+    #         "docs_url": f"/{docs_url}",
+    #         "openapi_url": f"/{docs_url}/openapi.json",
+    #     }
+    # else:
+    #     docs_params = {}
 
-    tags_metadata = [
-        {
-            "name": "apikeymanager",
-            "description": "Operations with users. The **login** logic is also here.",
-        },
-    ]
+    # tags_metadata = [
+    #     {
+    #         "name": "apikeymanager",
+    #         "description": "Operations with users. The **login** logic is also here.",
+    #     },
+    # ]
+    tags_metadata = None
 
     application = FastAPI(
         title=api_settings.name,
         description="APIKeyManager is a centralized Python-oriented API Key manager.",
         version="1.0.0",
         contact={
-            "name": "Gaudissart Vincent - CS Group",
-            "url": "https://gitlab.si.c-s.fr/space_platforms/sandbox/geojson-proxy",
+            "name": "CS Group France",
+            "url": "https://github.com/csgroup-oss/apikey-manager/",
             "email": "support@csgroup.space",
         },
         root_path=api_settings.root_path,
         openapi_tags=tags_metadata,
         lifespan=lifespan,
-        **docs_params,
+        # If we use the authlib OAuth authentication, we override the /docs endpoint.
+        # Here we must pass None so the URLs /docs and /docs/ (with a trailing slash)
+        # are both redirected to our endpoint.
+        docs_url=None if settings.use_authlib_oauth else "/docs/",
         redoc_url=None,
         swagger_ui_init_oauth={
             # we use the value passed by env var instead
@@ -149,7 +153,8 @@ def get_application() -> FastAPI:
 
     application.include_router(
         auth_router,
-        prefix=f"{URL_PREFIX}{auth_router_prefix}",
+        # prefix=f"{URL_PREFIX}{auth_router_prefix}",
+        prefix=auth_router_prefix,
         tags=["Manage API keys"],
         include_in_schema=SHOW_APIKEY_ENDPOINTS,
     )
@@ -165,6 +170,17 @@ def get_application() -> FastAPI:
         tags=["Health"],
         include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
     )
+
+    # Don't use the OpenIdConnect authentication.
+    # Use the authlib OAuth authentication instead.
+    if settings.use_authlib_oauth:
+        authlib_oauth_router = authlib_oauth.init(application)
+
+        application.include_router(
+            authlib_oauth_router,
+            tags=["authlib OAuth"],
+            include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
+        )
 
     return application
 

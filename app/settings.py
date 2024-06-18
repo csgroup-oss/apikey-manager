@@ -16,11 +16,19 @@
 # limitations under the License.
 
 import os
+from dataclasses import dataclass
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+
+
+@dataclass
+class AuthInfo:
+    user_id: str
+    user_login: str
+    roles: list[str]
 
 
 class ApiSettings(BaseSettings):
@@ -78,11 +86,11 @@ def env_bool(var: str, default: bool) -> bool:
 # TODO: update README.md and helm charts for these env variables
 
 
-# URL prefix for cluster deployment as '/prefix' or empty string if undefined
-try:
-    URL_PREFIX = "/" + os.environ["APIKEYMAN_URL_PREFIX"].strip("/")
-except KeyError:
-    URL_PREFIX = ""
+# # URL prefix for cluster deployment as '/prefix' or empty string if undefined
+# try:
+#     URL_PREFIX = "/" + os.environ["APIKEYMAN_URL_PREFIX"].strip("/")
+# except KeyError:
+#     URL_PREFIX = ""
 
 OAUTH2_SERVER_URL = os.getenv(
     "OAUTH2_SERVER_URL", "https://auth.p3.csgroup.space"
@@ -109,3 +117,8 @@ VERIFY_AUDIENCE = env_bool("VERIFY_AUDIENCE", default=True)
 # Show endpoints in the openapi swagger ?
 SHOW_APIKEY_ENDPOINTS = env_bool("SHOW_APIKEY_ENDPOINTS", default=True)
 SHOW_TECHNICAL_ENDPOINTS = env_bool("SHOW_TECHNICAL_ENDPOINTS", default=False)
+
+# If False: use the OpenIdConnect authentication.
+# If True: use the authlib OAuth authentication instead.
+# It is hardcoded to True for Reference System, but should be set configurable.
+use_authlib_oauth: bool = True

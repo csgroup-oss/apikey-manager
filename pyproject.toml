@@ -24,6 +24,8 @@ dependencies = [
     "httpx",
     "python-keycloak",
     "email-validator",
+    "authlib",
+    "itsdangerous",
 ]
 dynamic = ["version"]
 

@@ -25,8 +25,6 @@ import uuid
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
-from keycloak import KeycloakAdmin, KeycloakError, KeycloakOpenIDConnection
-from keycloak.exceptions import KeycloakConnectionError, KeycloakGetError
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -46,12 +44,7 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from ..settings import (
-    OAUTH2_CLIENT_ID,
-    OAUTH2_CLIENT_SECRET,
-    OAUTH2_REALM,
-    OAUTH2_SERVER_URL,
-)
+from ..auth.keycloak_util import KCUtil
 
 LIST_API_KEYS = True
 
@@ -101,37 +94,7 @@ class APIKeyCrud:
 
         meta.create_all(self.engine)
 
-        self.keycloak_admin: KeycloakAdmin = None
-
-    def get_keycloak_admin(self):
-        """Init and return an admin keycloak connection from the admin client"""
-
-        # TODO: add a thread lock to be sure to execute only once ?
-
-        if self.keycloak_admin:
-            return self.keycloak_admin
-
-        print(  # TODO use logger # noqa: T201
-            f"Connecting to the keycloak server {OAUTH2_SERVER_URL!r} ..."
-        )
-
-        try:
-            keycloak_connection = KeycloakOpenIDConnection(
-                server_url=OAUTH2_SERVER_URL,
-                realm_name=OAUTH2_REALM,
-                client_id=OAUTH2_CLIENT_ID,
-                client_secret_key=str(OAUTH2_CLIENT_SECRET),
-                verify=True,
-            )
-            self.keycloak_admin = KeycloakAdmin(connection=keycloak_connection)
-            print("Connected to the keycloak server")  # TODO use logger # noqa: T201
-            return self.keycloak_admin
-
-        except KeycloakError as error:
-            raise RuntimeError(
-                f"Error connecting with keycloak to server_url={OAUTH2_SERVER_URL!r}, "
-                f"realm_name={OAUTH2_REALM!r} with client_id={OAUTH2_CLIENT_ID!r}"
-            ) from error
+        self.kcutil = KCUtil()
 
     def create_key(
         self,
@@ -268,73 +231,34 @@ class APIKeyCrud:
         from the keycloak user information
         """
 
-        # For now disable this,
-        # see: https://pforge-exchange2.astrium.eads.net/jira/browse/RSPY-292
-        return
-
         with self.engine.connect() as conn:
             t = self.t_apitoken
 
             # Get the owner (user id) of the api key from database
             response = conn.execute(
-                select(t.c["user_id", "user_login", "latest_sync_date"]).where(
-                    t.c.api_key == api_key
-                )
+                select(
+                    t.c["user_id", "user_login", "latest_sync_date", "is_active"]
+                ).where(t.c.api_key == api_key)
             ).first()
 
-            # The api key doesn't exist or if the last sync is too recent, do nothing
-            if (not response) or ((datetime.utcnow() - response[2]) < SYNC_LIMIT):
+            # The api key doesn't exist, or if the last sync is too recent, or the api key is not active, do nothing
+            if (
+                (not response)
+                or ((datetime.utcnow() - response[2]) < SYNC_LIMIT)
+                or (not response[3])
+            ):
                 return None
 
-            user_id = response[0]
-            user_login = response[1]
-
             # Get user info from keycloak
-            try:
-                user = self.get_keycloak_admin().get_user(user_id)
-                is_active = user["enabled"]
-                iam_roles = [
-                    role["name"]
-                    for role in self.keycloak_admin.get_realm_roles_of_user(user_id)
-                ]
-
-            except KeycloakGetError as error:
-                # If the user is not found, this means he was removed from keycloak.
-                # Thus we must remove all his api keys from the database.
-                if (error.response_code == 404) and (
-                    "User not found" in error.response_body.decode("utf-8")
-                ):
-                    LOGGER.warning(
-                        f"User '{user_login}/{user_id}' not found in keycloak. "
-                        "We remove their api keys from the database."
-                    )
-                    conn.execute(t.delete().where(t.c.user_id == user_id))
-                    conn.commit()
-                    return
-
-                # Else just raise other errors.
-                # TODO: what could they be ? Handle special cases ?
-                raise
-
-            # Connection error to the keycloak (e.g. service unavailable):
-            # log error and do nothing more (don't update database)
-            # TODO: to be confirmed.
-            except KeycloakConnectionError as error:
-                LOGGER.error(error)
-                return
-
-            # Raise any other error.
-            # TODO: what could they be ? Handle special cases ?
-            # except Exception:
-            #     raise
+            kc_info = self.kcutil.get_user_info(response[0])
 
             # Update the database
             conn.execute(
                 t.update()
                 .where(t.c.api_key == api_key)
                 .values(
-                    is_active=is_active,
-                    iam_roles=iam_roles,
+                    is_active=kc_info.is_enabled,
+                    iam_roles=kc_info.roles,
                     latest_sync_date=datetime.utcnow(),
                 )
             )

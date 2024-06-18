@@ -10,13 +10,6 @@ from starlette.requests import Request
 from ..settings import AuthInfo, api_settings
 from .keycloak_util import KCUtil
 
-# from fastapi.logger import logger
-
-# from app.router import router as http_router
-
-
-PREFIX = ""  # "/authlib/oauth"
-
 keycloak: StarletteOAuth2App = None
 
 

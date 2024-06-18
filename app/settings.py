@@ -58,7 +58,7 @@ class ApiSettings(BaseSettings):
 
     # If False (default): use the OpenIdConnect authentication.
     # If True: use the authlib OAuth authentication instead.
-    use_authlib_oauth: bool = True
+    use_authlib_oauth: bool = False
 
     auth_function: Callable | None = None
 

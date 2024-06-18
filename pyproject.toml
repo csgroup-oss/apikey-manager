@@ -19,7 +19,9 @@ dependencies = [
     "pydantic_settings",
     "aiohttp",
     "slowapi",
-    "python-keycloak"
+    "python-keycloak",
+    "authlib",
+    "itsdangerous",
 ]
 dynamic = ["version"]
 

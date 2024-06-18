@@ -83,15 +83,16 @@ if not api_settings.use_authlib_oauth:
         print("Connected to the keycloak server")  # TODO use logger # noqa: T201
         return authorization_endpoint
 
-    # See: https://developer.zendesk.com/api-reference/sales-crm/authentication/requests/
+    # See:
+    # https://developer.zendesk.com/api-reference/sales-crm/authentication/requests/
     # Authorization Code Flow - Three Legged - is the most secure authentication flow,
     # and should be utilized when possible.
     # oauth2 = OAuth2AuthorizationCodeBearer(
     #     authorizationUrl=authorization_endpoint, tokenUrl=token_endpoint
     # )
 
-    # In our case we don't want the user to know the client secret so we use the implicit
-    # flow (Two Legged) instead which does not use the client secret.
+    # In our case we don't want the user to know the client secret so we use the
+    # implicit flow (Two Legged) instead which does not use the client secret.
     # The client id is passed by environment variable.
     # The fastapi oauth2 implementation doens not define (as v0.110.0) an implicit
     # implementation so we just override OAuth2AuthorizationCodeBearer and change
@@ -200,7 +201,7 @@ async def api_key_security(
 
 
 @router.get("/me")
-async def show_my_information(auth_info: Annotated[dict, Depends(oidc_auth)]):
+async def show_my_information(auth_info: Annotated[AuthInfo, Depends(oidc_auth)]):
     return {
         "user_id": auth_info.user_id,
         "user_login": auth_info.user_login,
@@ -210,7 +211,7 @@ async def show_my_information(auth_info: Annotated[dict, Depends(oidc_auth)]):
 
 @router.get("/api_key/new")
 async def create_api_key(
-    auth_info: Annotated[dict, Depends(oidc_auth)],
+    auth_info: Annotated[AuthInfo, Depends(oidc_auth)],
     name: Annotated[
         str,
         Query(
@@ -270,7 +271,7 @@ class UsageLog(BaseModel):
     "/api_key/list", response_model=list[UsageLog], response_model_exclude_none=True
 )
 async def list_my_api_keys(
-    auth_info: Annotated[dict, Depends(oidc_auth)]
+    auth_info: Annotated[AuthInfo, Depends(oidc_auth)]
 ) -> list[UsageLog]:
     """
     List all API keys and usage information associated with my account.
@@ -298,7 +299,7 @@ async def list_my_api_keys(
 
 @router.get("/api_key/revoke")
 async def revoke_api_key(
-    auth_info: Annotated[dict, Depends(oidc_auth)],
+    auth_info: Annotated[AuthInfo, Depends(oidc_auth)],
     api_key: Annotated[
         str, Query(..., alias="api-key", description="the api_key to revoke")
     ],
@@ -311,7 +312,7 @@ async def revoke_api_key(
 
 @router.get("/api_key/renew")
 async def renew_api_key(
-    auth_info: Annotated[dict, Depends(oidc_auth)],
+    auth_info: Annotated[AuthInfo, Depends(oidc_auth)],
     api_key: Annotated[
         str, Query(..., alias="api-key", description="the API key to renew")
     ],

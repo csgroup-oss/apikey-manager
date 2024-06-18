@@ -241,7 +241,8 @@ class APIKeyCrud:
                 ).where(t.c.api_key == api_key)
             ).first()
 
-            # The api key doesn't exist, or if the last sync is too recent, or the api key is not active, do nothing
+            # The api key doesn't exist, or if the last sync is too recent,
+            # or the api key is not active, do nothing
             if (
                 (not response)
                 or ((datetime.utcnow() - response[2]) < SYNC_LIMIT)

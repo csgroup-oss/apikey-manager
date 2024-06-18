@@ -218,6 +218,11 @@ class APIKeyCrud:
                 return None
 
             response = row._asdict()
+
+            # If the apikey is revoked
+            if not response["is_active"]:
+                return None
+
             latest_sync_date = response["latest_sync_date"]
             # SQLite does not store timezone. Small warkaround
             if latest_sync_date.utcoffset() is None:
@@ -228,7 +233,8 @@ class APIKeyCrud:
             ):
                 LOGGER.debug(f"Sync user info of `{response['user_id']}` with KeyCLoak")
                 kc_info = self.kcutil.get_user_info(response["user_id"])
-                # Update the database
+                # Update the database.
+                # Revoke the apikey if the user is not enabled in keycloak anymore.
                 conn.execute(
                     t.update()
                     .where(t.c.api_key == self.__hash(api_key))
@@ -240,12 +246,11 @@ class APIKeyCrud:
                 )
                 conn.commit()
 
-                response["is_active"] = kc_info.is_enabled
-                response["iam_roles"] = kc_info.roles
+                # If user is not enabled in keycloak anymore
+                if not kc_info.is_enabled:
+                    return None
 
-            if not response["is_active"]:
-                # If user is not active anymore
-                return None
+                response["iam_roles"] = kc_info.roles
 
             # We run the logging in a separate thread as writing takes some time
             threading.Thread(

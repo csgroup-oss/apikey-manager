@@ -60,6 +60,17 @@ def get_application() -> FastAPI:
     # else:
     #     docs_params = {}
 
+    docs_param = {
+        # If we use the authlib OAuth authentication, we override the /docs endpoint.
+        # Here we must pass None so the URLs /docs and /docs/ (with a trailing slash)
+        # are both redirected to our endpoint.
+        "docs_url": None if settings.use_authlib_oauth else "/docs/",
+        # When Ingress redirects the root domain URL to /docs, it also needs
+        # to have the openapi.json file under /docs.
+        # NOTE: this should be set configurable.
+        "openapi_url": "/docs/openapi.json",
+    }
+
     # tags_metadata = [
     #     {
     #         "name": "apikeymanager",
@@ -80,10 +91,7 @@ def get_application() -> FastAPI:
         root_path=api_settings.root_path,
         openapi_tags=tags_metadata,
         lifespan=lifespan,
-        # If we use the authlib OAuth authentication, we override the /docs endpoint.
-        # Here we must pass None so the URLs /docs and /docs/ (with a trailing slash)
-        # are both redirected to our endpoint.
-        docs_url=None if settings.use_authlib_oauth else "/docs/",
+        **docs_param,
         redoc_url=None,
         swagger_ui_init_oauth={
             # we use the value passed by env var instead

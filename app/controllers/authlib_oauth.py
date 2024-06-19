@@ -6,6 +6,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from starlette.config import Config
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
+from starlette.responses import RedirectResponse
 
 from .. import settings as api_settings
 from ..auth.keycloak_util import KCUtil
@@ -74,8 +75,8 @@ def init(app: FastAPI) -> APIRouter:
         userinfo = dict(token["userinfo"])
         request.session["user"] = userinfo
 
-        # Display the Swagger UI
-        return get_swagger_ui_html(openapi_url=app.openapi_url, title=ui_title)
+        # Redirect to this same endpoint to remove the URL query parameters
+        return RedirectResponse("docs")
 
     @router.get("/logout")
     async def logout(request: Request):

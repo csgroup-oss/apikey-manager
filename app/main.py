@@ -43,7 +43,7 @@ def get_application() -> FastAPI:
 
     application = FastAPI(
         title=api_settings.name,
-        description="APIKeyManager is a centralized Python-oriented API Key manager.",
+        description=api_settings.swagger_description,
         version="1.0.0",
         contact={
             "name": "CS Group France",

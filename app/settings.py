@@ -61,6 +61,11 @@ class ApiSettings(BaseSettings):
     # If True: use the authlib OAuth authentication instead.
     use_authlib_oauth: bool = False
 
+    # Description displayed in the swagger front page
+    swagger_description: str = (
+        "APIKeyManager is a centralized Python-oriented API Key manager."
+    )
+
     # By default, the openapi.json file is under /
     # If e.g. Ingress redirects the root domain URL to /docs, it also needs
     # to have the openapi.json file under /docs

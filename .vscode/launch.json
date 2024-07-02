@@ -1,0 +1,13 @@
+{
+  "configurations": [
+    {
+      "name": "Python Debugger: API Key Manager",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.main",
+      "env": { "PYTHONPATH": "${workspaceFolder}/" },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    }
+  ]
+}

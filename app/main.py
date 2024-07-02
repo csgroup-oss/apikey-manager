@@ -1,7 +1,7 @@
 # Copyright 2023-2024, CS GROUP - France, https://www.csgroup.eu/
 #
 # This file is part of APIKeyManager project
-#     https://gitlab.si.c-s.fr/space_applications/apikeymanager/
+#     https://github.com/csgroup-oss/apikey-manager/
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,61 +16,23 @@
 # limitations under the License.
 
 import re
-from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from collections.abc import Callable
 
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.logger import logger
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from . import settings
-from .controllers import auth_router, authlib_oauth, example_router, health_router
-from .controllers.auth_controller import router_prefix as auth_router_prefix
-from .settings import (  # URL_PREFIX,
-    SHOW_APIKEY_ENDPOINTS,
-    SHOW_TECHNICAL_ENDPOINTS,
-    ApiSettings,
-    rate_limiter,
-)
-from .utils.asyncget import SingletonAiohttp
+from .auth import authlib_oauth
+from .controllers import auth_router, example_router, health_router
+from .settings import api_settings, rate_limiter
 
 fastAPI_logger = logger  # convenient name
 
-api_settings = ApiSettings()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator:
-    SingletonAiohttp.get_aiohttp_client()
-    yield
-    await SingletonAiohttp.close_aiohttp_client()
-
 
 def get_application() -> FastAPI:
-    # For cluster deployment: override the swagger /docs URL from an environment
-    # variable. Also set the openapi.json URL under the same path.
-    # if URL_PREFIX:
-    #     docs_url = URL_PREFIX.strip("/")
-    #     docs_params = {
-    #         "docs_url": f"/{docs_url}",
-    #         "openapi_url": f"/{docs_url}/openapi.json",
-    #     }
-    # else:
-    #     docs_params = {}
-
-    docs_param = {
-        # If we use the authlib OAuth authentication, we override the /docs endpoint.
-        # Here we must pass None so the URLs /docs and /docs/ (with a trailing slash)
-        # are both redirected to our endpoint.
-        "docs_url": None if settings.use_authlib_oauth else "/docs/",
-        # When Ingress redirects the root domain URL to /docs, it also needs
-        # to have the openapi.json file under /docs.
-        # NOTE: this should be set configurable.
-        "openapi_url": "/docs/openapi.json",
-    }
-
     # tags_metadata = [
     #     {
     #         "name": "apikeymanager",
@@ -88,15 +50,17 @@ def get_application() -> FastAPI:
             "url": "https://github.com/csgroup-oss/apikey-manager/",
             "email": "support@csgroup.space",
         },
+        openapi_url=api_settings.openapi_url,
+        # If we use the authlib OAuth authentication, we override the /docs endpoint.
+        # Here we must pass None so the URLs /docs and /docs/ (with a trailing slash)
+        # are both redirected to our endpoint.
+        docs_url=None if api_settings.use_authlib_oauth else "/docs/",
         root_path=api_settings.root_path,
         openapi_tags=tags_metadata,
-        lifespan=lifespan,
-        **docs_param,
         redoc_url=None,
         swagger_ui_init_oauth={
-            # we use the value passed by env var instead
-            "clientId": "(this value is not used)",
-            "appName": "API-Key Manager",
+            "clientId": api_settings.oidc_client_id,
+            "appName": api_settings.name,
             "usePkceWithAuthorizationCodeGrant": True,
             "scopes": "openid profile",
         },
@@ -152,45 +116,36 @@ def get_application() -> FastAPI:
     application.state.limiter = rate_limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    # NOTE: we prefix by URL_PREFIX the endpoints that we want to expose
-    # to the internet.
-    # When deployed, Ingress is used to redirect requests to this prefix.
-    # We do not prefix the technical endpoints because we don't want to
-    # expose them to the internet.
-    # TODO: discuss it with Vincent.
-
-    application.include_router(
-        auth_router,
-        # prefix=f"{URL_PREFIX}{auth_router_prefix}",
-        prefix=auth_router_prefix,
-        tags=["Manage API keys"],
-        include_in_schema=SHOW_APIKEY_ENDPOINTS,
-    )
-    application.include_router(
-        example_router,
-        prefix="/check",
-        tags=["Check API keys"],
-        include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
-    )
+    application.include_router(auth_router, prefix="/auth", tags=["Manage API keys"])
     application.include_router(
         health_router,
         prefix="/health",
         tags=["Health"],
-        include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
+        include_in_schema=api_settings.show_technical_endpoints,
     )
 
     # Don't use the OpenIdConnect authentication.
     # Use the authlib OAuth authentication instead.
-    if settings.use_authlib_oauth:
+    if api_settings.use_authlib_oauth:
         authlib_oauth_router = authlib_oauth.init(application)
 
         application.include_router(
             authlib_oauth_router,
             tags=["authlib OAuth"],
-            include_in_schema=SHOW_TECHNICAL_ENDPOINTS,
+            include_in_schema=api_settings.show_technical_endpoints,
         )
 
+    if api_settings.debug:
+        application.include_router(
+            example_router,
+            prefix="/example",
+            tags=["Example of protected service"],
+            include_in_schema=api_settings.show_technical_endpoints,
+        )
     return application
 
 
 app = get_application()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=9999, log_config="log_config.yaml")

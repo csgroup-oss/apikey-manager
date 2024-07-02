@@ -2,12 +2,7 @@ imagePullSecrets:
   - name: regcred
 
 config:
-  allowed_origin_regex: .*(geostorm\.eu\|csgroup\.space)
-  api_keys_db_url: "postgresql://xxxxx:yyyyyyy@p2.csgroup.space:19432/secrets"
-  oauth2_server_url: https://auth.p3.csgroup.space
-  oauth2_realm: METIS
-  oauth2_client_id: ""
-  oauth2_client_secret: ""
+
 
 ingress:
   enabled: true

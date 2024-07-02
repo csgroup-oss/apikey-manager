@@ -1,7 +1,7 @@
 # Copyright 2023-2024, CS GROUP - France, https://www.csgroup.eu/
 #
 # This file is part of APIKeyManager project
-#     https://gitlab.si.c-s.fr/space_applications/apikeymanager/
+#     https://github.com/csgroup-oss/apikey-manager/
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from pydantic import field_validator
@@ -35,19 +35,40 @@ class ApiSettings(BaseSettings):
     """FASTAPI application settings."""
 
     name: str = "API-Key Manager"
+    root_path: str = ""
+    debug: bool = False
     cors_origins_regex: str = ".*"  # r".*(geostorm\.eu|csgroup\.space)"
     cors_allow_methods: str = "GET"
-    cachecontrol: str = "public, max-age=3600"
-    root_path: str = ""
-    debug: bool = True
 
-    disable_cog: bool = False
-    disable_stac: bool = False
-    disable_mosaic: bool = False
+    database_url: str = "sqlite:///./test.db"
+    default_apikey_ttl_hour: int = 15 * 24  # in hour
 
-    lower_case_query_parameters: bool = False
+    oidc_endpoint: str = ""
+    oidc_realm: str = ""
+    oidc_client_id: str = ""
 
-    model_config = SettingsConfigDict(env_prefix="GEOJSONPROXY_", env_file=".env")
+    # Admin client id and secret used for oauth2 operations.
+    # The client must have have the real_management/view_users
+    # and "implicit" flow privileges.
+    #  -1 means no sync
+    keycloak_sync_freq: int = 5 * 60
+    oidc_client_secret: str = ""
+
+    # Show endpoints in the openapi swagger ?
+    show_technical_endpoints: bool = False
+
+    # If False (default): use the OpenIdConnect authentication.
+    # If True: use the authlib OAuth authentication instead.
+    use_authlib_oauth: bool = False
+
+    # By default, the openapi.json file is under /
+    # If e.g. Ingress redirects the root domain URL to /docs, it also needs
+    # to have the openapi.json file under /docs
+    openapi_url: str = "/openapi.json"
+
+    auth_function: Callable | None = None
+
+    model_config = SettingsConfigDict(env_prefix="APIKM_", env_file=".env")
 
     @field_validator("cors_allow_methods")
     def parse_cors_allow_methods(cls, v):
@@ -59,66 +80,16 @@ class ApiSettings(BaseSettings):
         """Parse root path"""
         return v.rstrip("/")
 
+    @property
+    def oidc_metadata_url(self):
+        return (
+            self.oidc_endpoint
+            + "/realms/"
+            + self.oidc_realm
+            + "/.well-known/openid-configuration"
+        )
 
-##################
-# Other settings #
-##################
 
-# Add a rate limiter to avoid cracking the api keys by brute force.
-# See: https://slowapi.readthedocs.io/en/latest/#fastapi
+api_settings = ApiSettings()
+
 rate_limiter = Limiter(key_func=get_remote_address)
-
-#########################
-# Environment variables #
-#########################
-
-
-def env_bool(var: str, default: bool) -> bool:
-    """
-    Return True if an environemnt variable is set to 1, true or yes (case insensitive).
-    Return False if set to 0, false or no (case insensitive).
-    Return the default value if not set or set to a different value.
-    """
-    val = os.getenv(var, str(default)).lower()
-    return val in ("y", "yes", "t", "true", "on", "1")
-
-
-# TODO: update README.md and helm charts for these env variables
-
-
-# # URL prefix for cluster deployment as '/prefix' or empty string if undefined
-# try:
-#     URL_PREFIX = "/" + os.environ["APIKEYMAN_URL_PREFIX"].strip("/")
-# except KeyError:
-#     URL_PREFIX = ""
-
-OAUTH2_SERVER_URL = os.getenv(
-    "OAUTH2_SERVER_URL", "https://auth.p3.csgroup.space"
-).strip("/")
-OAUTH2_REALM = os.getenv("OAUTH2_REALM", "METIS").strip("/")
-
-OAUTH2_METADATA_URL = (
-    f"{OAUTH2_SERVER_URL}/realms/{OAUTH2_REALM}/.well-known/openid-configuration"
-)
-
-# Admin client id and secret used for oauth2 operations.
-# The client must have have the real_management/view_users
-# and "implicit" flow privileges.
-OAUTH2_CLIENT_ID = os.environ["OAUTH2_CLIENT_ID"]
-OAUTH2_CLIENT_SECRET = os.environ["OAUTH2_CLIENT_SECRET"]
-
-# See https://github.com/marcospereirampj/python-keycloak/issues/89
-# There has been a change to KeyCloak recently, and it doesn't map the client ID
-# into the auth field of the token by default any more.
-# Disable this audience check as a workaround.
-# TODO: do we want to keep this ?
-VERIFY_AUDIENCE = env_bool("VERIFY_AUDIENCE", default=True)
-
-# Show endpoints in the openapi swagger ?
-SHOW_APIKEY_ENDPOINTS = env_bool("SHOW_APIKEY_ENDPOINTS", default=True)
-SHOW_TECHNICAL_ENDPOINTS = env_bool("SHOW_TECHNICAL_ENDPOINTS", default=False)
-
-# If False: use the OpenIdConnect authentication.
-# If True: use the authlib OAuth authentication instead.
-# It is hardcoded to True for Reference System, but should be set configurable.
-use_authlib_oauth: bool = True

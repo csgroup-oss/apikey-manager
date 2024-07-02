@@ -19,20 +19,50 @@ The APIKeyManager component offers the following functions:
 - _SSO rights synchronization_: APIKeyManager enables you to retrieve the user's Keycloak rights, and synchronize them with the key's rights. If the user is deactivated in Keycloak, his API keys are automatically revoked after a given time, even if their expiry date has not been reached. Groups are also synchronized, to provide information to the underlying services if necessary.
 - _Security_: Protection of key verification APIs against brute-force attacks, management of keys requiring OIDC authentication.
 
+## Architecture
+
+![Architecture](docs/Architecture.png)
+
+### Create API Key workflow
+
+![Create API Key](docs/CreateAPIKEY.png)
+
+### Use API Key workflow
+
+![Use API KEy](docs/UseAPIKEY.png)
+
 ## Usage
+
+### Quickstart
+
+```bash
+virtualenv -p python3.11 venv
+source venv/bin/activate
+pip install -e . --no-cache-dir
+uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_config.yaml
+```
 
 ### Env vars
 
-| Variable                 | Description         | Default value                                                                 |
-| ------------------------ | ------------------- | ----------------------------------------------------------------------------- |
-| ALLOWED_ORIGIN_REGEX     |                     | `.*(geostorm\.eu\|csgroup\.space)`                                            |
-| API_PREFIX               |                     |                                                                               |
-| DEBUG                    | Display SQL request | `False`                                                                       |
-| API_KEYS_DB_URL          |                     | `sqlite:///./test.db`                                                         |
-| API_KEYS_EXPIRE_IN_DAYS  |                     | `15`                                                                          |
-| SHOW_APIKEY_ENDPOINTS    |                     | `True`                                                                        |
-| SHOW_TECHNICAL_ENDPOINTS |                     | `False`                                                                       |
-| OAUTH2_METADATA_URL      |                     | `https://auth.p3.csgroup.space/realms/METIS/.well-known/openid-configuration` |
+| Variable                       | Description                                                        | Default                 |
+| ------------------------------ | ------------------------------------------------------------------ | ----------------------- |
+| APIKM_NAME                     | Application name                                                   | `"API-Key Manager"`     |
+| APIKM_ROOT_PATH                | API root path                                                      | `""`                    |
+| APIKM_DEBUG                    | DEBUG mode (display SQL queries)                                   | `False`                 |
+| APIKM_CORS_ORIGINS_REGEX       | Allow CORS from (regexp)                                           | `""`                    |
+| APIKM_CORS_ALLOW_METHODS       | Allow CORS for methods                                             | `"GET"`                 |
+| APIKM_DATABASE_URL             | Database to store API Keys                                         | `"sqlite:///./test.db"` |
+| APIKM_DEFAULT_APIKEY_TTL_HOUR  | Default lifetime of an API Key (in hour)                           | `360`                   |
+| APIKM_OIDC_ENDPOINT            | OIDC End Point                                                     | `""`                    |
+| APIKM_OIDC_REALM               | OIDC Realm                                                         | `""`                    |
+| APIKM_OIDC_CLIENT_ID           | OIDC CLient ID                                                     | `""`                    |
+| APIKM_OIDC_CLIENT_SECRET       | OIDC Secret used to sync user info from Keycloak                   | `""`                    |
+| APIKM_KEYCLOAK_SYNC_FREQ       | Sync frequency of a user with data stored in Keycloak (in seconds) | `300`                   |
+| APIKM_SHOW_TECHNICAL_ENDPOINTS | Show technical endoints (health)                                   | `True`                  |
+
+### Endpoints
+
+![Endpoints](docs/Endpoints.png)
 
 ## Developement
 
@@ -70,7 +100,7 @@ python -m pytest
 ### Run with uvicorn
 
 ```bash
-uvicorn app.main:app --host localhost --port 9999 --reload
+uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_config.yaml
 ```
 
 You can check the API docs at [localhost:9999](http://localhost:9999/docs/).
@@ -87,11 +117,23 @@ Use it
 
 ```bash
 docker run --name apikeymanager --rm \
-    -p 8000:8000 \
+    -e APIKM_OIDC_ENDPOINT='' \
+    -e APIKM_OIDC_REALM='' \
+    -e APIKM_OIDC_CLIENT_ID='' \
+    -e APIKM_OIDC_CLIENT_SECRET='' \
+    -p 9999:8000 \
     apikeymanager:latest
 ```
 
 You can check the API docs at [localhost:8000](http://localhost:8000/docs).
+
+### Publish the Docker image to the Image repository
+
+```bash
+docker image tag apikeymanager:latest 643vlk6z.gra7.container-registry.ovh.net/metis/apikeymanager:latest
+
+docker push 643vlk6z.gra7.container-registry.ovh.net/metis/apikeymanager:latest
+```
 
 ### HELM
 
@@ -100,13 +142,19 @@ Create a robot account in the harbor interface to access GeoJson Proxy Image
 ```bash
 kubectl create namespace apikeymanager
 
-kubectl create secret docker-registry regcred --docker-username='xxxxxxx' --docker-password='yyyyyyyyyyy' --docker-server='643vlk6z.gra7.container-registry.ovh.net' --namespace apikeymanager
+kubectl create secret docker-registry regcred --docker-username='<LOGIN>' --docker-password='<PASSWORD>' --docker-server='643vlk6z.gra7.container-registry.ovh.net' --namespace apikeymanager
 ```
 
 Deploy APIKey Manager
 
 ```bash
 helm upgrade --install apikeymanager ./deploy/helm/apikeymanager --namespace apikeymanager --values deploy/helm/values.yaml
+```
+
+Remove APIKey Manager
+
+```bash
+helm delete apikeymanager --namespace apikeymanager
 ```
 
 ## Copyright and License

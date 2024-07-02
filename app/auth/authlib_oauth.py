@@ -8,8 +8,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
-from .. import settings as api_settings
-from ..auth.keycloak_util import KCUtil
+from ..settings import AuthInfo, api_settings
+from .keycloak_util import KCUtil
 
 keycloak: StarletteOAuth2App = None
 
@@ -17,11 +17,11 @@ keycloak: StarletteOAuth2App = None
 def init(app: FastAPI) -> APIRouter:
     router = APIRouter()
 
-    domain_url = f"{api_settings.OAUTH2_SERVER_URL}/realms/{api_settings.OAUTH2_REALM}"
+    domain_url = f"{api_settings.oidc_endpoint}/realms/{api_settings.oidc_realm}"
 
     config_data = {
-        "KEYCLOAK_CLIENT_ID": api_settings.OAUTH2_CLIENT_ID,
-        "KEYCLOAK_CLIENT_SECRET": api_settings.OAUTH2_CLIENT_SECRET,
+        "KEYCLOAK_CLIENT_ID": api_settings.oidc_client_id,
+        "KEYCLOAK_CLIENT_SECRET": api_settings.oidc_client_secret,
         "KEYCLOAK_DOMAIN_URL": domain_url,
     }
 
@@ -36,7 +36,7 @@ def init(app: FastAPI) -> APIRouter:
         "keycloak",
         client_id=config("KEYCLOAK_CLIENT_ID"),
         client_secret=config("KEYCLOAK_CLIENT_SECRET"),
-        server_metadata_url=api_settings.OAUTH2_METADATA_URL,
+        server_metadata_url=api_settings.oidc_metadata_url,
         client_kwargs={
             "scope": "openid profile email",
         },
@@ -89,7 +89,7 @@ def init(app: FastAPI) -> APIRouter:
 kcutil = KCUtil()
 
 
-async def authlib_oauth(request: Request) -> api_settings.AuthInfo:
+async def authlib_oauth(request: Request) -> AuthInfo:
     user = request.session.get("user")
     if not user:
         raise HTTPException(
@@ -105,9 +105,7 @@ async def authlib_oauth(request: Request) -> api_settings.AuthInfo:
     user_info = kcutil.get_user_info(user_id)
 
     if user_info.is_enabled:
-        return api_settings.AuthInfo(
-            user_id, user_login, user_info.roles  # type: ignore
-        )
+        return AuthInfo(user_id, user_login, user_info.roles)
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

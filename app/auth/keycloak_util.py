@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from keycloak import KeycloakAdmin, KeycloakError, KeycloakOpenIDConnection
 from keycloak.exceptions import KeycloakGetError
 
-from .. import settings
+from ..settings import api_settings as settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass
 class KCInfo:
     is_enabled: bool
-    roles: list[str] | None
+    roles: list[str]
 
 
 class KCUtil:
@@ -39,15 +39,13 @@ class KCUtil:
 
     def __get_keycloak_admin(self) -> KeycloakAdmin:
         """Init and return an admin keycloak connection from the admin client"""
-        LOGGER.debug(
-            f"Connecting to the keycloak server {settings.OAUTH2_SERVER_URL} ..."
-        )
+        LOGGER.debug(f"Connecting to the keycloak server {settings.oidc_endpoint} ...")
         try:
             keycloak_connection = KeycloakOpenIDConnection(
-                server_url=settings.OAUTH2_SERVER_URL,
-                realm_name=settings.OAUTH2_REALM,
-                client_id=settings.OAUTH2_CLIENT_ID,
-                client_secret_key=str(settings.OAUTH2_CLIENT_SECRET),
+                server_url=settings.oidc_endpoint,
+                realm_name=settings.oidc_realm,
+                client_id=settings.oidc_client_id,
+                client_secret_key=settings.oidc_client_secret,
                 verify=True,
             )
             LOGGER.debug("Connected to the keycloak server")
@@ -55,9 +53,9 @@ class KCUtil:
 
         except KeycloakError as error:
             raise RuntimeError(
-                f"Error connecting with keycloak to '{settings.OAUTH2_SERVER_URL}', "
-                f"realm_name={settings.OAUTH2_REALM} with client_id="
-                f"{settings.OAUTH2_CLIENT_ID}."
+                f"Error connecting with keycloak to '{settings.oidc_endpoint}', "
+                f"realm_name={settings.oidc_realm} with client_id="
+                f"{settings.oidc_client_id}."
             ) from error
 
     def get_user_info(self, user_id: str) -> KCInfo:
@@ -76,6 +74,6 @@ class KCUtil:
                 "User not found" in error.response_body.decode("utf-8")
             ):
                 LOGGER.warning(f"User '{user_id}' not found in keycloak.")
-                return KCInfo(False, None)
+                return KCInfo(False, [])
 
             raise

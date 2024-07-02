@@ -1,7 +1,7 @@
 # Copyright 2023-2024, CS GROUP - France, https://www.csgroup.eu/
 #
 # This file is part of APIKeyManager project
-#     https://gitlab.si.c-s.fr/space_applications/apikeymanager/
+#     https://github.com/csgroup-oss/apikey-manager/
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,11 +18,13 @@
 
 """Interaction with database.
 """
+import hashlib
 import logging
-import os
 import threading
 import uuid
-from datetime import datetime, timedelta
+from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import (
@@ -32,45 +34,30 @@ from sqlalchemy import (
     DateTime,
     Integer,
     MetaData,
+    Row,
     String,
     Table,
     create_engine,
     desc,
     select,
 )
-from starlette.status import (
-    HTTP_403_FORBIDDEN,
-    HTTP_404_NOT_FOUND,
-    HTTP_422_UNPROCESSABLE_ENTITY,
-)
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
-from ..auth.keycloak_util import KCUtil
-
-LIST_API_KEYS = True
-
-# NOTE : use from databases import Database for working with async pg
-# https://fastapi.tiangolo.com/how-to/async-sql-encode-databases/#import-and-set-up-databases
-
-DATABASE_URL = os.environ.get("API_KEYS_DB_URL", "sqlite:///./test.db")
-
-# TODO: add to helm charts ?
-EXPIRATION_LIMIT = int(os.environ.get("API_KEYS_EXPIRE_IN_DAYS", "15"))
-
-# Limit in minutes after which we should update the API key information
-# in the database from the keycloak user information
-# TODO: add to helm charts ?
-SYNC_LIMIT = timedelta(minutes=float(os.environ.get("API_KEYS_SYNC_IN_MINUTES", "5")))
+from ..settings import api_settings as settings
+from .keycloak_util import KCUtil
 
 LOGGER = logging.getLogger(__name__)
 
-DEBUG = bool(os.environ.get("DEBUG", False))
+LIST_API_KEYS = True
 
 
 class APIKeyCrud:
     """Class handling SQLite connection and writes"""
 
     def __init__(self) -> None:
-        self.engine = create_engine(DATABASE_URL, echo=DEBUG, pool_pre_ping=True)
+        self.engine = create_engine(
+            settings.database_url, echo=settings.debug, pool_pre_ping=True
+        )
 
         meta = MetaData()
 
@@ -96,6 +83,9 @@ class APIKeyCrud:
 
         self.kcutil = KCUtil()
 
+    def __hash(self, api_key):
+        return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+
     def create_key(
         self,
         name: str,
@@ -110,14 +100,14 @@ class APIKeyCrud:
         with self.engine.connect() as conn:
             conn.execute(
                 self.t_apitoken.insert().values(
-                    api_key=api_key,
+                    api_key=self.__hash(api_key),
                     name=name,
                     user_id=user_id,
                     user_login=user_login,
                     never_expire=never_expire,
-                    expiration_date=datetime.utcnow()
-                    + timedelta(days=EXPIRATION_LIMIT),
-                    latest_sync_date=datetime.utcnow(),
+                    expiration_date=datetime.now(UTC)
+                    + timedelta(hours=settings.default_apikey_ttl_hour),
+                    latest_sync_date=datetime.now(UTC),
                     iam_roles=iam_roles,
                     config=config,
                     allowed_referers=allowed_referers,
@@ -127,18 +117,15 @@ class APIKeyCrud:
 
         return api_key
 
-    def check_key_user(self, user_id: str, api_key: str) -> None:
-        """
-        Check that an api key exists and belongs to a user.
-
-        Raises:
-            404 HTTP exception if the key doesn't exist.
-            403 HTTP exception if the key doesn't belong to the user.
-        """
+    def renew_key(
+        self, user_id: str, api_key: str, new_expiration_date: str | None
+    ) -> str | None:
         with self.engine.connect() as conn:
             t = self.t_apitoken
             resp = conn.execute(
-                select(t.c["user_id"]).where(t.c.api_key == api_key)
+                select(t.c["is_active", "expiration_date"]).where(
+                    (t.c.api_key == self.__hash(api_key)) & (t.c.user_id == user_id)
+                )
             ).first()
 
             # API key not found
@@ -146,26 +133,6 @@ class APIKeyCrud:
                 raise HTTPException(
                     status_code=HTTP_404_NOT_FOUND, detail="API key not found"
                 )
-
-            if resp[0] != user_id:
-                raise HTTPException(
-                    status_code=HTTP_403_FORBIDDEN,
-                    detail="You are not the owner of this API key",
-                )
-
-    def renew_key(
-        self, user_id: str, api_key: str, new_expiration_date: str | None
-    ) -> str | None:
-        # Check that the api key exists and belongs to the given user.
-        self.check_key_user(user_id, api_key)
-
-        with self.engine.connect() as conn:
-            t = self.t_apitoken
-            resp = conn.execute(
-                select(
-                    t.c["is_active", "total_queries", "expiration_date", "never_expire"]
-                ).where(t.c.api_key == api_key)
-            ).first()
 
             response_lines = []
 
@@ -177,8 +144,8 @@ class APIKeyCrud:
 
             # Without an expiration date, we set it here
             if not new_expiration_date:
-                parsed_expiration_date = datetime.utcnow() + timedelta(
-                    days=EXPIRATION_LIMIT
+                parsed_expiration_date = datetime.now(UTC) + timedelta(
+                    hours=settings.default_apikey_ttl_hour
                 )
 
             else:
@@ -194,7 +161,7 @@ class APIKeyCrud:
 
             conn.execute(
                 t.update()
-                .where(t.c.api_key == api_key)
+                .where(t.c.api_key == self.__hash(api_key))
                 .values(is_active=True, expiration_date=parsed_expiration_date)
             )
 
@@ -214,55 +181,14 @@ class APIKeyCrud:
             api_key: the API key to revoke
         """
 
-        # Check that the api key exists and belongs to the given user.
-        self.check_key_user(user_id, api_key)
-
         with self.engine.connect() as conn:
             t = self.t_apitoken
-            conn.execute(
-                t.update().where(t.c.api_key == api_key).values(is_active=False)
-            )
-
-            conn.commit()
-
-    def __update_key_from_keycloak(self, api_key: str) -> None:
-        """
-        From time to time we update the API key information in the database
-        from the keycloak user information
-        """
-
-        with self.engine.connect() as conn:
-            t = self.t_apitoken
-
-            # Get the owner (user id) of the api key from database
-            response = conn.execute(
-                select(
-                    t.c["user_id", "user_login", "latest_sync_date", "is_active"]
-                ).where(t.c.api_key == api_key)
-            ).first()
-
-            # The api key doesn't exist, or if the last sync is too recent,
-            # or the api key is not active, do nothing
-            if (
-                (not response)
-                or ((datetime.utcnow() - response[2]) < SYNC_LIMIT)
-                or (not response[3])
-            ):
-                return None
-
-            # Get user info from keycloak
-            kc_info = self.kcutil.get_user_info(response[0])
-
-            # Update the database
             conn.execute(
                 t.update()
-                .where(t.c.api_key == api_key)
-                .values(
-                    is_active=kc_info.is_enabled,
-                    iam_roles=kc_info.roles,
-                    latest_sync_date=datetime.utcnow(),
-                )
+                .where((t.c.api_key == self.__hash(api_key)) & (t.c.user_id == user_id))
+                .values(latest_sync_date=datetime.now(UTC), is_active=False)
             )
+
             conn.commit()
 
     def check_key(self, api_key: str) -> dict | None:
@@ -273,64 +199,81 @@ class APIKeyCrud:
              api_key: the API key to validate
         """
 
-        self.__update_key_from_keycloak(api_key)
-
         with self.engine.connect() as conn:
             t = self.t_apitoken
-            response = conn.execute(
-                select(t.c["user_login", "iam_roles", "config"]).where(
-                    (t.c.api_key == api_key)
-                    & t.c.is_active
-                    & (t.c.never_expire | (t.c.expiration_date > datetime.utcnow()))
+            row = conn.execute(
+                select(
+                    t.c[
+                        "user_id",
+                        "user_login",
+                        "is_active",
+                        "iam_roles",
+                        "config",
+                        "latest_sync_date",
+                    ]
+                ).where(
+                    (t.c.api_key == self.__hash(api_key))
+                    & (t.c.never_expire | (t.c.expiration_date > datetime.now(UTC)))
                 )
             ).first()
 
-            if not response:
+            if not row:
+                # If the apikey is expired, directly return None
                 return None
-            else:
-                # The key is valid
 
-                # We run the logging in a separate thread as writing takes some time
-                threading.Thread(
-                    target=self._update_usage,
-                    args=(api_key,),
-                ).start()
+            response = row._asdict()
+            latest_sync_date = response["latest_sync_date"]
+            # SQLite does not store timezone. Small warkaround
+            if latest_sync_date.utcoffset() is None:
+                latest_sync_date = latest_sync_date.replace(tzinfo=timezone.utc)
 
-                # We return directly
-                return response._asdict()
+            if settings.keycloak_sync_freq > 0 and datetime.now(UTC) > (
+                latest_sync_date + timedelta(seconds=settings.keycloak_sync_freq)
+            ):
+                LOGGER.debug(f"Sync user info of `{response['user_id']}` with KeyCLoak")
+                kc_info = self.kcutil.get_user_info(response["user_id"])
+                # Update the database
+                conn.execute(
+                    t.update()
+                    .where(t.c.api_key == self.__hash(api_key))
+                    .values(
+                        is_active=kc_info.is_enabled,
+                        iam_roles=kc_info.roles,
+                        latest_sync_date=datetime.now(UTC),
+                    )
+                )
+                conn.commit()
+
+                response["is_active"] = kc_info.is_enabled
+                response["iam_roles"] = kc_info.roles
+
+            if not response["is_active"]:
+                # If user is not active anymore
+                return None
+
+            # We run the logging in a separate thread as writing takes some time
+            threading.Thread(
+                target=self._update_usage,
+                args=(api_key,),
+            ).start()
+
+            # We return directly
+            return response
 
     def _update_usage(self, api_key: str) -> None:
         with self.engine.connect() as conn:
             t = self.t_apitoken
             conn.execute(
                 t.update()
-                .where(t.c.api_key == api_key)
+                .where(t.c.api_key == self.__hash(api_key))
                 .values(
                     total_queries=t.c.total_queries + 1,
-                    latest_query_date=datetime.utcnow(),
+                    latest_query_date=datetime.now(UTC),
                 )
             )
             conn.commit()
 
-    def get_usage_stats(
-        self, user_id: str
-    ) -> list[
-        tuple[
-            str,
-            str,
-            str,
-            str,
-            bool,
-            bool,
-            datetime,
-            datetime,
-            int,
-            datetime,
-            dict,
-            dict,
-            dict,
-        ]
-    ]:
+    def get_usage_stats(self, user_id: str) -> Sequence[Row[Any]]:
         """
         Returns usage stats for all API keys
 

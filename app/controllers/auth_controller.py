@@ -1,7 +1,7 @@
 # Copyright 2023-2024, CS GROUP - France, https://www.csgroup.eu/
 #
 # This file is part of APIKeyManager project
-#     https://gitlab.si.c-s.fr/space_applications/apikeymanager/
+#     https://github.com/csgroup-oss/apikey-manager/
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,125 +16,48 @@
 # limitations under the License.
 
 
-import json
 import logging
-import urllib
 from datetime import datetime, timedelta
 from typing import Annotated
 
-import httpx
+import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security
-from fastapi.responses import RedirectResponse
-from fastapi.security import APIKeyHeader, APIKeyQuery, OAuth2AuthorizationCodeBearer
+from fastapi.security import APIKeyHeader, APIKeyQuery, OpenIdConnect
 from jose import jwt
 from jose.exceptions import JOSEError
-from pydantic import BaseModel
+from pydantic import BaseModel, Json
+from pydantic.json_schema import SkipJsonSchema
 from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
 
-from .. import settings as api_settings
-from ..settings import (  # URL_PREFIX,
-    OAUTH2_CLIENT_ID,
-    OAUTH2_METADATA_URL,
-    SHOW_TECHNICAL_ENDPOINTS,
-    VERIFY_AUDIENCE,
-    AuthInfo,
-)
-from ..utils.asyncget import SingletonAiohttp
-from . import authlib_oauth
-from ._apikey_crud import apikey_crud
+from ..auth import authlib_oauth
+from ..auth.apikey_crud import apikey_crud
+from ..settings import AuthInfo, api_settings, rate_limiter
 
 LOGGER = logging.getLogger(__name__)
 
+
 #
 # TODO
-# - manage referer
-# - manage additionnals metadatas
-# - manage roles
 # - URLS history
 
-
 router = APIRouter()
-router_prefix = "/auth"  # TODO: put in settings ?
 
 # Use the OpenIdConnect authentication
 if not api_settings.use_authlib_oauth:
-
-    def oauth2_endpoint(endpoint: str) -> str:
-        """Get endpoints for oauth2 authentication"""
-        response = httpx.get(OAUTH2_METADATA_URL)
-        response.raise_for_status()
-        return response.json().get(endpoint)
-
-    authorization_endpoint = None
-
-    def get_authorization_endpoint():
-        """Init and return the authorization endpoint url."""
-
-        # TODO: add a thread lock to be sure to execute only once ?
-
-        global authorization_endpoint
-        if authorization_endpoint:
-            return authorization_endpoint
-
-        print(  # TODO use logger # noqa: T201
-            f"Connecting to the keycloak server {OAUTH2_METADATA_URL!r} ..."
-        )
-        authorization_endpoint = oauth2_endpoint("authorization_endpoint")
-        print("Connected to the keycloak server")  # TODO use logger # noqa: T201
-        return authorization_endpoint
-
-    # See:
-    # https://developer.zendesk.com/api-reference/sales-crm/authentication/requests/
-    # Authorization Code Flow - Three Legged - is the most secure authentication flow,
-    # and should be utilized when possible.
-    # oauth2 = OAuth2AuthorizationCodeBearer(
-    #     authorizationUrl=authorization_endpoint, tokenUrl=token_endpoint
-    # )
-
-    # In our case we don't want the user to know the client secret so we use the
-    # implicit flow (Two Legged) instead which does not use the client secret.
-    # The client id is passed by environment variable.
-    # The fastapi oauth2 implementation doens not define (as v0.110.0) an implicit
-    # implementation so we just override OAuth2AuthorizationCodeBearer and change
-    # the flow manually.
-    class OAuth2Implicit(OAuth2AuthorizationCodeBearer):
-        def __init__(self, *args, **kwargs):
-            # No token url overriding with the 'implicit' flow
-            super().__init__(*args, **kwargs, tokenUrl="")
-
-            self.model.flows.implicit = self.model.flows.authorizationCode
-            self.model.flows.authorizationCode = None
-
-    # Use this implementation, override the authorization url to use our custom endpoint
-    # that is defined just below.
-    # oauth2 = OAuth2Implicit(authorizationUrl=f"{URL_PREFIX}{router_prefix}/auth")
-    oauth2 = OAuth2Implicit(authorizationUrl=f"{router_prefix}/auth")
-
-    @router.get("/auth", include_in_schema=SHOW_TECHNICAL_ENDPOINTS)
-    async def custom_authorization(request: Request):
-        """Custom endpoint to override the authorization url to the oauth2 server."""
-
-        # Read the request query params, override the client id to use the
-        # value passed by environment variable
-        params = dict(request.query_params)
-        params["client_id"] = OAUTH2_CLIENT_ID
-
-        # Get request to the authorization url
-        return RedirectResponse(
-            f"{get_authorization_endpoint()}?{urllib.parse.urlencode(params)}"  # type: ignore # noqa: E501
-        )
+    oidc = OpenIdConnect(openIdConnectUrl=api_settings.oidc_metadata_url)
 
     public_key_cache: tuple[datetime, tuple[str, str]] | None = None
 
     async def get_issuer_and_public_key() -> tuple[str, str]:
-        """Return oauth2 URL and public key"""
         global public_key_cache
 
         if not public_key_cache or public_key_cache[0] < datetime.now():
-            issuer = (await SingletonAiohttp.query_url(OAUTH2_METADATA_URL)).get(
-                "issuer"
-            )
-            public_key = (await SingletonAiohttp.query_url(issuer)).get("public_key")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_settings.oidc_metadata_url) as resp:
+                    issuer = (await resp.json()).get("issuer")
+                async with session.get(issuer) as resp:
+                    public_key = (await resp.json()).get("public_key")
+
             key = (
                 "-----BEGIN PUBLIC KEY-----\n"
                 + public_key
@@ -144,25 +67,23 @@ if not api_settings.use_authlib_oauth:
 
         return public_key_cache[1]
 
-    async def oidc_auth(token: str | None = Depends(oauth2)) -> AuthInfo:
-        """Return oauth2 authentication info"""
+    async def oidc_auth(token: str | None = Depends(oidc)) -> AuthInfo:
         if not token:
             raise HTTPException(
                 status_code=HTTP_403_FORBIDDEN, detail="Not authenticated"
             )
         try:
             issuer, key = await get_issuer_and_public_key()
+            if token.startswith("Bearer "):
+                token = token[7:]  # remove the "Bearer " header
+
             decoded = jwt.decode(
-                # token[7:],  # remove the "Bearer " header
-                token,
-                key=key,
-                issuer=issuer,
-                options={"verify_aud": VERIFY_AUDIENCE},
+                token, key=key, issuer=issuer, audience=api_settings.oidc_client_id
             )
             return AuthInfo(
                 decoded.get("sub"),
                 decoded.get("preferred_username"),
-                decoded.get("realm_access", {}).get("roles", []),
+                decoded.get("roles"),
             )
         except JOSEError as e:
             raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
@@ -171,6 +92,14 @@ if not api_settings.use_authlib_oauth:
 # Use the authlib OAuth authentication
 else:
     oidc_auth = authlib_oauth.authlib_oauth  # type: ignore
+
+
+async def main_auth():
+    if api_settings.auth_function:
+        return api_settings.auth_function
+    else:
+        return oidc_auth
+
 
 api_key_query = APIKeyQuery(
     name="api-key", scheme_name="API key query", auto_error=False
@@ -201,7 +130,7 @@ async def api_key_security(
 
 
 @router.get("/me")
-async def show_my_information(auth_info: Annotated[AuthInfo, Depends(oidc_auth)]):
+async def show_me(auth_info: Annotated[AuthInfo, Depends(oidc_auth)]):
     return {
         "user_id": auth_info.user_id,
         "user_login": auth_info.user_login,
@@ -210,7 +139,7 @@ async def show_my_information(auth_info: Annotated[AuthInfo, Depends(oidc_auth)]
 
 
 @router.get("/api_key/new")
-async def create_api_key(
+async def get_new_api_key(
     auth_info: Annotated[AuthInfo, Depends(oidc_auth)],
     name: Annotated[
         str,
@@ -218,83 +147,36 @@ async def create_api_key(
             description="set API key name",
         ),
     ],
+    config: Annotated[
+        Json,
+        Query(
+            description="Allowed hosts that can use this API Key",
+        ),
+    ] = None,
+    allowed_referers: Annotated[
+        list[str] | SkipJsonSchema[None],
+        Query(description="Allowed hosts that can use this API Key"),
+    ] = None,
     never_expires: Annotated[
         bool,
         Query(
             description="if set, the created API key will never be considered expired",
         ),
     ] = False,
-    config: Annotated[
-        str,
-        Query(
-            description="Allowed hosts that can use this API Key",
-        ),
-    ] = "{}",
-    allowed_referers: Annotated[
-        list[str] | None,
-        Query(
-            description="Allowed hosts that can use this API Key",
-        ),
-    ] = None,
 ) -> str:
     """
-    Create and return a new API key associated with my account.
+    Returns:
+        api_key: a newly generated API key
     """
-    config_json = json.loads(config)
     return apikey_crud.create_key(
         name,
         auth_info.user_id,
         auth_info.user_login,
         never_expires,
         auth_info.roles,
-        config_json,
+        config or {},
         allowed_referers,
     )
-
-
-class UsageLog(BaseModel):
-    api_key: str | None = None
-    name: str
-    user_login: str
-    is_active: bool
-    never_expire: bool
-    expiration_date: datetime
-    latest_query_date: datetime | None
-    total_queries: int
-    latest_sync_date: datetime | None
-    iam_roles: list | None
-    config: dict | None
-    allowed_referers: list[str] | None
-
-
-@router.get(
-    "/api_key/list", response_model=list[UsageLog], response_model_exclude_none=True
-)
-async def list_my_api_keys(
-    auth_info: Annotated[AuthInfo, Depends(oidc_auth)]
-) -> list[UsageLog]:
-    """
-    List all API keys and usage information associated with my account.
-    """
-    # TODO Add some sort of filtering on older keys/unused keys?
-
-    return [
-        UsageLog(
-            api_key=row[0],
-            name=row[1],
-            user_login=row[3],
-            is_active=row[4],
-            never_expire=row[5],
-            expiration_date=row[6],
-            latest_query_date=row[7],
-            total_queries=row[8],
-            latest_sync_date=row[9],
-            iam_roles=row[10],
-            config=row[11],
-            allowed_referers=row[12],
-        )
-        for row in apikey_crud.get_usage_stats(auth_info.user_id)
-    ]
 
 
 @router.get("/api_key/revoke")
@@ -328,3 +210,73 @@ async def renew_api_key(
     Renew an API key associated with my account, reactivate it if it was revoked.
     """
     return apikey_crud.renew_key(auth_info.user_id, api_key, expiration_date)
+
+
+class UsageLog(BaseModel):
+    api_key: str | None = None
+    name: str
+    user_login: str
+    is_active: bool
+    never_expire: bool
+    expiration_date: datetime
+    latest_query_date: datetime | None
+    total_queries: int
+    latest_sync_date: datetime | None
+    iam_roles: list[str] | None
+    config: dict | None
+    allowed_referers: list[str] | None
+
+
+@router.get(
+    "/api_key/list",
+    response_model=list[UsageLog],
+    response_model_exclude_none=True,
+)
+def get_api_key_usage_logs(
+    auth_info: Annotated[AuthInfo, Depends(oidc_auth)]
+) -> list[UsageLog]:
+    """
+    Returns usage information for all API keys
+    """
+    # TODO Add some sort of filtering on older keys/unused keys?
+
+    return [
+        UsageLog(
+            api_key=row[0],
+            name=row[1],
+            user_login=row[3],
+            is_active=row[4],
+            never_expire=row[5],
+            expiration_date=row[6],
+            latest_query_date=row[7],
+            total_queries=row[8],
+            latest_sync_date=row[9],
+            iam_roles=row[10],
+            config=row[11],
+            allowed_referers=row[12],
+        )
+        for row in apikey_crud.get_usage_stats(auth_info.user_id)
+    ]
+
+
+class CheckKey(BaseModel):
+    user_id: str
+    user_login: str
+    iam_roles: list | None
+    config: dict | None
+
+
+@router.get("/check_key", response_model=CheckKey)
+@rate_limiter.limit("20/minute")
+async def check_api_key(
+    request: Request,  # needed by the rate limiter
+    query_param: Annotated[str, Security(api_key_query)],
+    header_param: Annotated[str, Security(api_key_header)],
+):
+    """
+    Check an API KEY validity in the database.
+    \f
+    Todo:
+        * Synchronize database with keycloak.
+    """
+    return await api_key_security(query_param, header_param)

@@ -1,7 +1,7 @@
 # Copyright 2023-2024, CS GROUP - France, https://www.csgroup.eu/
 #
 # This file is part of APIKeyManager project
-#     https://gitlab.si.c-s.fr/space_applications/apikeymanager/
+#     https://github.com/csgroup-oss/apikey-manager/
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

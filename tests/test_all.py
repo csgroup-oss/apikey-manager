@@ -15,29 +15,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 import os
-from pathlib import Path
-from fastapi.testclient import TestClient
-import pytest
 import tempfile
+from pathlib import Path
 
-from starlette.status import HTTP_403_FORBIDDEN
+import pytest
+from fastapi.testclient import TestClient
+from starlette.status import (
+    HTTP_403_FORBIDDEN,
+    HTTP_404_NOT_FOUND,
+    HTTP_429_TOO_MANY_REQUESTS,
+)
 
-
-from app.main import get_application
-from app.settings import ApiSettings
 from app.auth.apikey_crud import APIKeyCrud
 from app.controllers.auth_controller import (
     AuthInfo,
-    oidc_auth,
-    api_key_query,
     api_key_header,
+    api_key_query,
+    oidc_auth,
 )
+from app.main import get_application
+from app.settings import ApiSettings
 
 TESTS_DIR = Path(os.path.realpath(os.path.dirname(__file__)))
-
-# Temporary sqlite temp file paths
-db_paths = []
 
 #
 # Fixture implementations. Note: could be moved to a conftest.py file.
@@ -58,13 +59,9 @@ def before_and_after():
     # After all tests #
     ###################
 
-    # Remove sqlite temp files
-    for db_path in db_paths:
-        os.unlink(db_path)
 
-
-@pytest.fixture(name="random_db_url")
-def random_db_url_(monkeypatch):
+@pytest.fixture
+def random_db_url(monkeypatch):
     """
     Generate a random sqlite database url for each new pytest
     function so we use a fresh new database for each test.
@@ -75,34 +72,44 @@ def random_db_url_(monkeypatch):
     db_dir.mkdir(parents=True, exist_ok=True)
 
     # Create a temporary file under this dir
-    db_path = tempfile.NamedTemporaryFile(
-        dir=str(db_dir), suffix=".db", delete=False
-    ).name
-    db_url = f"sqlite:///{db_path}"
+    with tempfile.NamedTemporaryFile(dir=str(db_dir), suffix=".db") as db_path:
+        db_url = f"sqlite:///{db_path.name}"
 
-    # Update the env varibale to use this db url
-    monkeypatch.setenv("APIKM_DATABASE_URL", db_url)
+        # Update the env varibale to use this db url
+        monkeypatch.setenv("APIKM_DATABASE_URL", db_url)
 
-    # Save the temporary file paths, we'll remove them ourselves at the end of all tests.
-    db_paths.append(db_path)
+        # The temp file will be removed at the end of the test
+        yield
 
 
-@pytest.fixture(name="fastapi_app")
-def fastapi_app_(mocker, random_db_url):
+@pytest.fixture
+def fastapi_app(mocker, random_db_url):
     """Init the FastAPI application."""
+
+    # Read the mocked environment variables in a new ApiSettings object
+    # See: https://stackoverflow.com/a/69685866
+    settings = ApiSettings()
+    mocker.patch("app.auth.apikey_crud.settings", new=settings, autospec=False)
+    mocker.patch("app.auth.keycloak_util.settings", new=settings, autospec=False)
+    mocker.patch(
+        "app.controllers.auth_controller.api_settings", new=settings, autospec=False
+    )
+    mocker.patch("app.main.api_settings", new=settings, autospec=False)
 
     # Patch this global variables with a new APIKeyCrud()
     # so we use the random db url everytime = a fresh new databse.
-    # See: https://stackoverflow.com/a/69685866
-    mocker.patch("app.auth.apikey_crud.settings", new=ApiSettings(), autospec=False)
-    mocker.patch("app.auth.apikey_crud.apikey_crud", new=APIKeyCrud(), autospec=False)
+    apikey_crud = APIKeyCrud()
+    mocker.patch("app.auth.apikey_crud.apikey_crud", new=apikey_crud, autospec=False)
+    mocker.patch(
+        "app.controllers.auth_controller.apikey_crud", new=apikey_crud, autospec=False
+    )
 
     # Return the FastAPI application
     yield get_application()
 
 
-@pytest.fixture(name="client")
-def client_(fastapi_app):
+@pytest.fixture
+def client(fastapi_app):
     """Test the FastAPI application."""
     with TestClient(fastapi_app) as client:
         yield client
@@ -113,61 +120,124 @@ def client_(fastapi_app):
 #
 
 # Test variables
-USER_ID = "user_id"
-IAM_ROLES = ["role1", "role2", "role3"]
-APIKEY_NAME = "apikey_name"
-CONFIG = {}  # TODO test with values, I have error with e.g. {"my": "config"}
 
+USER_ID1 = "user_id1"
+IAM_ROLES1 = ["role1", "role2", "role3"]
+CONFIG1 = {}  # TODO test with values, I have error with e.g. {"my": "config"}
 
-async def authinfo():
-    """Mock the AuthInfo instance that contains the user info from keycloak"""
-    yield AuthInfo(USER_ID, IAM_ROLES)
+USER_ID2 = "user_id2"
+IAM_ROLES2 = ["role4", "role5"]
+CONFIG2 = {}  # TODO test with values
+
+WRONG_APIKEY = "wrong_apikey"
+WRONG_APIKEY_MESSAGE = "Wrong, revoked, or expired API key."
+MISSING_APIKEY_MESSAGE = "An API key must be passed as query or header"
+
+# Check the apikey validity by passing it as http header, url query and url body
+CHECK_APIKEY_ENDPOINTS = [
+    lambda client, apikey_value: client.get(
+        "/auth/check_key", headers={api_key_header.model.name: apikey_value}
+    ),
+    lambda client, apikey_value: client.get(
+        "/auth/check_key", params={api_key_query.model.name: apikey_value}
+    ),
+    lambda client, apikey_value: client.get(f"k/{apikey_value}/auth/check_key"),
+]
 
 
 def test_new_apikey(fastapi_app, client):
     """Create a new API key then check its validity."""
 
+    # For each user
+    for user_id, iam_roles, config in [
+        [USER_ID1, IAM_ROLES1, CONFIG1],
+        [USER_ID2, IAM_ROLES2, CONFIG2],
+    ]:
+        # Mock the AuthInfo instance that contains the user info from keycloak
+        fastapi_app.dependency_overrides[oidc_auth] = lambda: AuthInfo(
+            user_id, iam_roles
+        )
+
+        # Create a new API key
+        response = client.get(
+            "/auth/api_key/new", params={"name": "any name", "config": config}
+        )
+        response.raise_for_status()
+        apikey_value = response.json()
+
+        # List the apikeys for the current user.
+        # We should have a single apikey for each user.
+        response = client.get("/auth/api_key/list")
+        response.raise_for_status()
+        usage_logs = response.json()
+        assert len(usage_logs) == 1
+
+        # Check its hashed value
+        assert (
+            hashlib.sha256(apikey_value.encode("utf-8")).hexdigest()
+            == usage_logs[0]["api_key"]
+        )
+
+        # Expected result of the check/api_key endpoint
+        expected_check = {"user_id": user_id, "iam_roles": iam_roles, "config": config}
+
+        # Check the apikey validity by passing it as http header, url query and url body
+        for index, call_endpoint in enumerate(CHECK_APIKEY_ENDPOINTS):
+
+            # Check with the right apikey value
+            response = call_endpoint(client, apikey_value)
+            response.raise_for_status()
+            check_apikey = response.json()
+            assert check_apikey == expected_check
+
+            # The "k/{apikey_value}/auth/check_key" endpoint gives 404 with a wrong or missing apikey
+            expected_status = HTTP_404_NOT_FOUND if (index == 2) else HTTP_403_FORBIDDEN
+            message_404 = "Not Found"
+
+            # Test a wrong apikey value
+            response = call_endpoint(client, WRONG_APIKEY)
+            assert response.status_code == expected_status
+            assert (
+                response.json()["detail"] == message_404
+                if (index == 2)
+                else WRONG_APIKEY_MESSAGE
+            )
+
+            # Test a missing apikey. The url body gives a 404.
+            response = call_endpoint(client, "")
+            assert response.status_code == expected_status
+            assert (
+                response.json()["detail"] == message_404
+                if (index == 2)
+                else MISSING_APIKEY_MESSAGE
+            )
+
+
+@pytest.mark.parametrize(
+    "call_endpoint",
+    CHECK_APIKEY_ENDPOINTS,
+    ids=["by http header", "by url query", "by url body"],
+)
+def test_brute_force(fastapi_app, client, call_endpoint):
+    """
+    To protect against hacking apikeys by brute force, the user can make only n calls to the
+    check endpoint every minute (n is hardcoded in auth_controller.py, see @rate_limiter.limit)
+    """
+    ncalls = 20
+
+    # Mock the AuthInfo instance that contains the user info from keycloak
+    fastapi_app.dependency_overrides[oidc_auth] = lambda: AuthInfo(USER_ID1, IAM_ROLES1)
+
     # Create a new API key
-    fastapi_app.dependency_overrides[oidc_auth] = authinfo
     response = client.get(
-        "/auth/api_key/new", params={"name": APIKEY_NAME, "config": CONFIG}
+        "/auth/api_key/new", params={"name": "any name", "config": CONFIG1}
     )
     response.raise_for_status()
     apikey_value = response.json()
 
-    # Expected result when we check its validity
-    expected = {"user_id": USER_ID, "iam_roles": IAM_ROLES, "config": CONFIG}
+    # Check that the first n calls to the check endpoint work
+    for _ in range(ncalls):
+        call_endpoint(client, apikey_value).raise_for_status()
 
-    # Check its validity when passing the apikey as http header
-    response = client.get(
-        "/auth/check_key", headers={api_key_header.model.name: apikey_value}
-    )
-    response.raise_for_status()
-    check_apikey = response.json()
-    assert check_apikey == expected
-
-    # We should have be unauthorized without the apikey (no cache)
-    response = client.get("/auth/check_key")
-    assert response.status_code == HTTP_403_FORBIDDEN
-
-    # Check its validity when passing the apikey in the url query
-    response = client.get(
-        "/auth/check_key", params={api_key_query.model.name: apikey_value}
-    )
-    response.raise_for_status()
-    check_apikey = response.json()
-    assert check_apikey == expected
-
-    # Check again that we are unauthorized without the apikey (no cache)
-    response = client.get("/auth/check_key")
-    assert response.status_code == HTTP_403_FORBIDDEN
-
-    # Check its validity when passing it in the url
-    response = client.get(f"k/{apikey_value}/auth/check_key")
-    response.raise_for_status()
-    check_apikey = response.json()
-    assert check_apikey == expected
-
-    # Check again that we are unauthorized without the apikey (no cache)
-    response = client.get("/auth/check_key")
-    assert response.status_code == HTTP_403_FORBIDDEN
+    # The next call fails with error: 429 Too Many Requests
+    assert call_endpoint(client, apikey_value).status_code == HTTP_429_TOO_MANY_REQUESTS

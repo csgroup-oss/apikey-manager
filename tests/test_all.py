@@ -15,12 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import UTC, datetime, timedelta
 import hashlib
 import os
 import tempfile
-from pathlib import Path
 import time
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,7 +30,9 @@ from starlette.status import (
     HTTP_429_TOO_MANY_REQUESTS,
 )
 
+from app.auth import apikey_crud
 from app.auth.apikey_crud import APIKeyCrud
+from app.auth.keycloak_util import KCInfo
 from app.controllers.auth_controller import (
     AuthInfo,
     api_key_header,
@@ -40,8 +42,6 @@ from app.controllers.auth_controller import (
 )
 from app.main import get_application
 from app.settings import ApiSettings
-from app.auth import apikey_crud
-from app.auth.keycloak_util import KCInfo
 
 TESTS_DIR = Path(os.path.realpath(os.path.dirname(__file__)))
 
@@ -341,11 +341,8 @@ state_changes = []
 state_ids = []
 for from_state in all_states:
     for to_state in all_states:
-        # Don't start from a disabled user in keycloak, it makes no sense because,
-        # in this case, the user should not be able to user the apikey manager service.
-        if from_state[1][0]:
-            state_changes.append(from_state[1] + to_state[1])
-            state_ids.append(f"{from_state[0]} -> {to_state[0]}")
+        state_changes.append(from_state[1] + to_state[1])
+        state_ids.append(f"{from_state[0]} -> {to_state[0]}")
 
 
 @pytest.mark.parametrize(
@@ -369,19 +366,12 @@ def test_state_changes(
     # Test only using the apikey passed by http header, it should be enough
     check_endpoint = CHECK_APIKEY_ENDPOINTS[0]
 
-    # We always start from an enabled user in keycloak
-    assert from_user_ok
-
-    # Mock the user info returned from keycloak
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, from_user_ok)
-
     # Modify the refresh time in seconds to call keycloak again
     apikey_crud.settings.keycloak_sync_freq = 0.1
     time_to_sleep = 0.2
 
-    # If we start from an expired apikey: use a negative lifetime at the apikey creation
-    if from_expired:
-        apikey_crud.settings.default_apikey_ttl_hour = -1
+    # Mock the user info returned from keycloak, at first he's always enabled
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, True)
 
     # Create a new API key
     response = client.get(
@@ -390,70 +380,45 @@ def test_state_changes(
     response.raise_for_status()
     apikey_value = response.json()
 
-    # If we start from a revoked apikey: call the endpoint to revoke it
-    if from_revoked:
-        client.get(
-            "/auth/api_key/revoke", params={"api-key": apikey_value}
-        ).raise_for_status()
+    # Go to first then second state
+    for user_ok, revoked, expired in [
+        [from_user_ok, from_revoked, from_expired],
+        [to_user_ok, to_revoked, to_expired],
+    ]:
+        # To refresh from keycloak
+        time.sleep(time_to_sleep)
 
-    # Call the check apikey endpoint.
-    # If we start from and expired or revoked apikey, we should have a 403 unauthorized.
-    response = check_endpoint(client, apikey_value)
-    if from_expired or from_revoked:
-        assert response.status_code == HTTP_403_FORBIDDEN
-    else:
-        response.raise_for_status()
+        # Mock the user info returned from keycloak to enabled/disable the user
+        mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, user_ok)
 
-    #
-    # Now we switch state !
+        # Renew the apikey it with an expiration date in the
+        # past (to expire it) or the future (to renew it)
+        if expired:
+            new_expiration_date = datetime.now(UTC) + timedelta(hours=-1)
+        else:
+            new_expiration_date = datetime.now(UTC) + timedelta(hours=1)
 
-    # To refresh from keycloak
-    time.sleep(time_to_sleep)
+        # Call the endpoint to revoke the apikey
+        if revoked:
+            client.get(
+                "/auth/api_key/revoke", params={"api-key": apikey_value}
+            ).raise_for_status()
 
-    # Mock the user info returned from keycloak to enabled/disable the user
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, to_user_ok)
+        # Else call the endpoint to renew it
+        else:
+            client.get(
+                "/auth/api_key/renew",
+                params={
+                    "api-key": apikey_value,
+                    "expiration-date": new_expiration_date.isoformat(),
+                },
+            ).raise_for_status()
 
-    # Renew the apikey it with an expiration date in the 
-    # past (to expire it) or the future (to renew it)
-    if to_expired:
-        new_expiration_date = datetime.now(UTC) + timedelta(hours=-1)
-    else:
-        new_expiration_date = datetime.now(UTC) + timedelta(hours=1)
-
-    # Call the endpoint to revoke the apikey
-    if to_revoked:
-        client.get(
-            "/auth/api_key/revoke", params={"api-key": apikey_value}
-        ).raise_for_status()
-
-    # Else call the endpoint to renew it
-    else:
-        client.get(
-            "/auth/api_key/renew",
-            params={
-                "api-key": apikey_value, 
-                "expiration-date": new_expiration_date.isoformat(),
-            }).raise_for_status()
-
-    # Call the check apikey endpoint.
-    # We should have a nominal response only if the user is enabled in keycloak,
-    # the apikey is active and non-expired.
-    response = check_endpoint(client, apikey_value)
-    if to_user_ok and (not to_revoked) and (not to_expired):
-        response.raise_for_status()
-    else:
-        assert response.status_code == HTTP_403_FORBIDDEN
-
-
-# TODO: checker le nombre max d'appels / minute
-# le cache
-# issue https://github.com/csgroup-oss/apikey-manager/issues/1
-#
-# [13:17] GAUDISSART Vincent
-# Ok. Et tu as fait le test inverse : avoir des clés valide, désactiver dans keycloak et réactiver dans keycloak ?
-# En t'arrangeant bien sûr pour ne pas utiliser le cache
-# Et en tentant d'utiliser la clé entre la désactivatoon dans keycloak et la réactivation ?
-# Je ne suis pas sur que la clé fonctionne à la réactivation dans keycloak !
-
-# def test_bb(fastapi_app, client):
-#     assert False
+        # Call the check apikey endpoint.
+        # We should have a nominal response only if the user is enabled in keycloak,
+        # the apikey is active and non-expired.
+        response = check_endpoint(client, apikey_value)
+        if user_ok and (not revoked) and (not expired):
+            response.raise_for_status()
+        else:
+            assert response.status_code == HTTP_403_FORBIDDEN

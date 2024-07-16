@@ -39,6 +39,11 @@ class ApiSettings(BaseSettings):
     oidc_realm: str = ""
     oidc_client_id: str = ""
 
+    # Rate limiter configuration for the check apikey endpoint: after too many requests, 
+    # the user will receive an error: 429 Too Many Requests
+    # This configuration can be e.g. "20/minute" or "100/hour" or "2000/day" ...
+    rate_limit: str = "20/minute"
+
     # Admin client id and secret used for oauth2 operations.
     # The client must have have the real_management/view_users
     # and "implicit" flow privileges.

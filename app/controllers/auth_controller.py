@@ -249,9 +249,18 @@ class CheckKey(BaseModel):
     iam_roles: list | None
     config: dict | None
 
+def custom_rate_limiter(func):
+    """Customize the rate_limiter depending on our configuration."""
+    # If the env variable is not defined, don't use a rate limiter
+    if not api_settings.rate_limit:
+        return func
+    # Else return the rate_limiter decorator with our setting
+    dec = rate_limiter.limit(api_settings.rate_limit)(func)
+    return dec
+
 
 @router.get("/check_key", response_model=CheckKey)
-@rate_limiter.limit("20/minute")
+@custom_rate_limiter
 async def check_api_key(
     request: Request,  # needed by the rate limiter
     query_param: Annotated[str, Security(api_key_query)],

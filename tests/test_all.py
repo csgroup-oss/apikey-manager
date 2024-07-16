@@ -86,6 +86,7 @@ def fastapi_app(mocker, random_db_url):
         "app.controllers.auth_controller.api_settings", new=settings, autospec=False
     )
     mocker.patch("app.main.api_settings", new=settings, autospec=False)
+    mocker.patch("app.settings.api_settings", new=settings, autospec=False)
 
     # Patch this global variables with a new APIKeyCrud()
     # so we use the random db url everytime = a fresh new databse.
@@ -107,7 +108,7 @@ def client(fastapi_app):
 
 
 @pytest.fixture(autouse=True)
-def reset_rate_limiter():
+def reset_rate_limiter(mocker, fastapi_app):
     """
     Reset the rate limiter before each test.
     NOTE: maybe we need to mock this somehow for this test only so it doesn't impact other tests.
@@ -255,7 +256,7 @@ def test_new_apikey(
 def test_brute_force(mocker, fastapi_app, client, check_endpoint):
     """
     To protect against hacking apikeys by brute force, the user can make only n calls to the
-    check endpoint every minute (n is hardcoded in auth_controller.py, see @rate_limiter.limit)
+    check endpoint (n is set in configuration by the APIKM_RATE_LIMIT env var)
     """
     ncalls = 20
 
@@ -430,7 +431,9 @@ def test_state_changes(
                 t = crud.t_apitoken
                 conn.execute(
                     t.update()
-                    .where(t.c.api_key == crud._APIKeyCrud__hash(apikey_value)) # call private method
+                    .where(
+                        t.c.api_key == crud._APIKeyCrud__hash(apikey_value)
+                    )  # call private method
                     .values(**values)
                 )
                 conn.commit()

@@ -25,6 +25,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from starlette.status import (
+    HTTP_200_OK,
     HTTP_403_FORBIDDEN,
     HTTP_404_NOT_FOUND,
     HTTP_429_TOO_MANY_REQUESTS,
@@ -162,7 +163,7 @@ CHECK_APIKEY_ENDPOINTS = [
     ),
     lambda client, apikey_value: client.get(f"k/{apikey_value}/auth/check_key"),
 ]
-CHECK_APIKEY_IDS = ["by http header", "by url query", "by url body"]
+CHECK_APIKEY_IDS = ["by_http_header", "by_url_query", "by_url_body"]
 
 
 @pytest.mark.parametrize(
@@ -290,8 +291,8 @@ def test_cache(mocker, fastapi_app, client, check_endpoint):
     """
 
     # Modify the refresh time in seconds to call keycloak again
-    apikey_crud.settings.keycloak_sync_freq = 0.1
-    time_to_sleep = 0.2
+    apikey_crud.settings.keycloak_sync_freq = 0.5
+    time_to_sleep = 0.51
 
     # Mock the user info returned from keycloak
     mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1)
@@ -328,21 +329,21 @@ def test_cache(mocker, fastapi_app, client, check_endpoint):
 # when an apikey is revoked/renewed or is expired.
 # What happens when we switch from one state to another ? Test all cases.
 all_states = [
-    ["user NO, revoked NO, expired NO", [False, False, False]],
-    ["user NO, revoked NO, expired YES", [False, False, True]],
-    ["user NO, revoked YES, expired NO", [False, True, False]],
-    ["user NO, revoked YES, expired YES", [False, True, True]],
-    ["user YES, revoked NO, expired NO", [True, False, False]],
-    ["user YES, revoked NO, expired YES", [True, False, True]],
-    ["user YES, revoked YES, expired NO", [True, True, False]],
-    ["user YES, revoked YES, expired YES", [True, True, True]],
+    ["user_NO-revoked_NO-expired_NO", [False, False, False]],
+    ["user_NO-revoked_NO-expired_YES", [False, False, True]],
+    ["user_NO-revoked_YES-expired_NO", [False, True, False]],
+    ["user_NO-revoked_YES-expired_YES", [False, True, True]],
+    ["user_YES-revoked_NO-expired_NO", [True, False, False]],
+    ["user_YES-revoked_NO-expired_YES", [True, False, True]],
+    ["user_YES-revoked_YES-expired_NO", [True, True, False]],
+    ["user_YES-revoked_YES-expired_YES", [True, True, True]],
 ]
 state_changes = []
 state_ids = []
 for from_state in all_states:
     for to_state in all_states:
         state_changes.append(from_state[1] + to_state[1])
-        state_ids.append(f"{from_state[0]} -> {to_state[0]}")
+        state_ids.append(f"{from_state[0]}__to__{to_state[0]}")
 
 
 @pytest.mark.parametrize(
@@ -363,12 +364,22 @@ def test_state_changes(
 ):
     """Switch from a disabled/enabled user in keycloak and a revoked/renewed apikey, to another state"""
 
+    # Print the apikey usage info
+    def debug_apikey():
+        import json
+
+        response = client.get("/auth/api_key/list")
+        response.raise_for_status()
+        usage_logs = response.json()
+        assert len(usage_logs) == 1
+        print(json.dumps(usage_logs[0], indent=2))
+
     # Test only using the apikey passed by http header, it should be enough
     check_endpoint = CHECK_APIKEY_ENDPOINTS[0]
 
     # Modify the refresh time in seconds to call keycloak again
-    apikey_crud.settings.keycloak_sync_freq = 0.1
-    time_to_sleep = 0.2
+    apikey_crud.settings.keycloak_sync_freq = 0.01
+    time_to_sleep = 0.02
 
     # Mock the user info returned from keycloak, at first he's always enabled
     mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, True)
@@ -380,45 +391,61 @@ def test_state_changes(
     response.raise_for_status()
     apikey_value = response.json()
 
+    # At first the user is enabled, the apikey is not revoked and not expired
+    old_user_ok = True
+    old_revoked = False
+    old_expired = False
+
     # Go to first then second state
     for user_ok, revoked, expired in [
         [from_user_ok, from_revoked, from_expired],
         [to_user_ok, to_revoked, to_expired],
     ]:
-        # To refresh from keycloak
-        time.sleep(time_to_sleep)
+        # Do we switch states ?
+        switch_user_ok = user_ok != old_user_ok
+        switch_revoked = revoked != old_revoked
+        switch_expired = expired != old_expired
+        old_user_ok = user_ok
+        old_revoked = revoked
+        old_expired = expired
 
         # Mock the user info returned from keycloak to enabled/disable the user
-        mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, user_ok)
+        if switch_user_ok:
+            mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, user_ok)
 
-        # Renew the apikey it with an expiration date in the
-        # past (to expire it) or the future (to renew it)
-        if expired:
-            new_expiration_date = datetime.now(UTC) + timedelta(hours=-1)
-        else:
-            new_expiration_date = datetime.now(UTC) + timedelta(hours=1)
+        # If we switch the revoke or expired status: update the database
+        if switch_revoked or switch_expired:
+            values = {}
+            if switch_revoked:
+                values["is_active"] = not revoked
+            if switch_expired:
+                future = -1 if expired else 1  # -1 for past, 1 for future
+                values["expiration_date"] = datetime.now(UTC) + timedelta(
+                    hours=future * apikey_crud.settings.default_apikey_ttl_hour
+                )
 
-        # Call the endpoint to revoke the apikey
-        if revoked:
-            client.get(
-                "/auth/api_key/revoke", params={"api-key": apikey_value}
-            ).raise_for_status()
+            # Use the apikey_crud instance to update the database
+            crud = apikey_crud.apikey_crud
+            with crud.engine.connect() as conn:
+                t = crud.t_apitoken
+                conn.execute(
+                    t.update()
+                    .where(t.c.api_key == crud._APIKeyCrud__hash(apikey_value)) # call private method
+                    .values(**values)
+                )
+                conn.commit()
 
-        # Else call the endpoint to renew it
-        else:
-            client.get(
-                "/auth/api_key/renew",
-                params={
-                    "api-key": apikey_value,
-                    "expiration-date": new_expiration_date.isoformat(),
-                },
-            ).raise_for_status()
+        # To refresh from keycloak
+        time.sleep(time_to_sleep)
 
         # Call the check apikey endpoint.
         # We should have a nominal response only if the user is enabled in keycloak,
         # the apikey is active and non-expired.
+        debug_apikey()
         response = check_endpoint(client, apikey_value)
+        debug_apikey()
         if user_ok and (not revoked) and (not expired):
-            response.raise_for_status()
+            assert response.status_code == HTTP_200_OK
+            assert response.json()["iam_roles"] == IAM_ROLES1
         else:
             assert response.status_code == HTTP_403_FORBIDDEN

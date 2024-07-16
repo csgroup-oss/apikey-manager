@@ -138,7 +138,7 @@ def get_new_api_key(
     config: Annotated[
         Json,
         Query(
-            description="Free configuration structure that can be used to configure services",
+            description="Free JSON object that can be used to configure services",
         ),
     ],
     allowed_referers: Annotated[

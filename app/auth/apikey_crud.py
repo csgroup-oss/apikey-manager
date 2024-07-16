@@ -159,7 +159,11 @@ class APIKeyCrud:
             conn.execute(
                 t.update()
                 .where(t.c.api_key == self.__hash(api_key))
-                .values(is_active=True, expiration_date=parsed_expiration_date)
+                .values(
+                    latest_sync_date=datetime.now(UTC),
+                    is_active=True,
+                    expiration_date=parsed_expiration_date,
+                )
             )
 
             conn.commit()

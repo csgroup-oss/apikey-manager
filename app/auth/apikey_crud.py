@@ -66,7 +66,12 @@ class APIKeyCrud:
             meta,
             Column("api_key", String, primary_key=True, index=True),
             Column("name", String),
+            # User ID in keycloak
             Column("user_id", String, index=True, nullable=False),
+            # Is the user active in keycloak ? True by defulat, because
+            # to create an apikey, the user must be authenticated to keycloak.
+            Column("user_active", Boolean, default=True),
+            # Is the apikey active = not revoked manually ?
             Column("is_active", Boolean, default=True),
             Column("never_expire", Boolean, default=False),
             Column("expiration_date", DateTime),
@@ -206,6 +211,7 @@ class APIKeyCrud:
                 select(
                     t.c[
                         "user_id",
+                        "user_active",
                         "is_active",
                         "iam_roles",
                         "config",
@@ -223,7 +229,8 @@ class APIKeyCrud:
 
             response = row._asdict()
 
-            # If the apikey is revoked
+            # If the apikey has been revoked manually, then it can
+            # only be renewed manually.
             if not response["is_active"]:
                 return None
 
@@ -237,24 +244,24 @@ class APIKeyCrud:
             ):
                 LOGGER.debug(f"Sync user info of `{response['user_id']}` with KeyCLoak")
                 kc_info = self.kcutil.get_user_info(response["user_id"])
-                # Update the database.
-                # Revoke the apikey if the user is not enabled in keycloak anymore.
+                # Update the database
                 conn.execute(
                     t.update()
                     .where(t.c.api_key == self.__hash(api_key))
                     .values(
-                        is_active=kc_info.is_enabled,
+                        user_active=kc_info.is_enabled,
                         iam_roles=kc_info.roles,
                         latest_sync_date=datetime.now(UTC),
                     )
                 )
                 conn.commit()
 
-                # If user is not enabled in keycloak anymore
-                if not kc_info.is_enabled:
-                    return None
-
+                response["user_active"] = kc_info.is_enabled
                 response["iam_roles"] = kc_info.roles
+
+            if not response["user_active"]:
+                # If user is not active anymore
+                return None
 
             # We run the logging in a separate thread as writing takes some time
             threading.Thread(

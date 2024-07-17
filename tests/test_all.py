@@ -243,6 +243,90 @@ def test_new_apikey(
         assert response.status_code == wrong_status
         assert response.json()["detail"] == missing_message
 
+        # Create a new API key, check that we now have two
+        response = client.get(
+            "/auth/api_key/new", params={"name": "any other name", "config": config}
+        )
+        response.raise_for_status()
+        response = client.get("/auth/api_key/list")
+        response.raise_for_status()
+        usage_logs = response.json()
+        assert len(usage_logs) == 2
+
+
+def test_revoke_renew(mocker, fastapi_app, client):
+    """Test that we can revoke then renew an apikey."""
+
+    # Check only using the apikey passed by http header, it should be enough
+    check_endpoint = CHECK_APIKEY_ENDPOINTS[0]
+
+    # Mock the user info returned from keycloak
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1)
+
+    # Create a new API key
+    response = client.get(
+        "/auth/api_key/new", params={"name": "any name", "config": CONFIG1}
+    )
+    response.raise_for_status()
+    apikey_value = response.json()
+
+    # Revoke it
+    response = client.get("/auth/api_key/revoke", params={"api-key": apikey_value})
+    response.raise_for_status()
+
+    # Check the apikey. We should have a 403 Unauthorize.
+    assert check_endpoint(client, apikey_value).status_code == HTTP_403_FORBIDDEN
+
+    # Renew it
+    response = client.get("/auth/api_key/renew", params={"api-key": apikey_value})
+    response.raise_for_status()
+
+    # We should now be authorized
+    assert check_endpoint(client, apikey_value).raise_for_status()
+
+
+def test_expired_renew(mocker, fastapi_app, client):
+    """Test that we can renew an expired apikey."""
+
+    # Check only using the apikey passed by http header, it should be enough
+    check_endpoint = CHECK_APIKEY_ENDPOINTS[0]
+
+    # Mock the user info returned from keycloak
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1)
+
+    # Create a new API key
+    response = client.get(
+        "/auth/api_key/new", params={"name": "any name", "config": CONFIG1}
+    )
+    response.raise_for_status()
+    apikey_value = response.json()
+
+    # Force its expiration date by renewing it with a date from the past
+    response = client.get(
+        "/auth/api_key/renew",
+        params={
+            "api-key": apikey_value,
+            "expiration-date": datetime.now(UTC) + timedelta(hours=-1),
+        },
+    )
+    response.raise_for_status()
+
+    # Check the apikey. We should have a 403 Unauthorize.
+    assert check_endpoint(client, apikey_value).status_code == HTTP_403_FORBIDDEN
+
+    # Renew it with a date in the future
+    response = client.get(
+        "/auth/api_key/renew",
+        params={
+            "api-key": apikey_value,
+            "expiration-date": datetime.now(UTC) + timedelta(hours=1),
+        },
+    )
+    response.raise_for_status()
+
+    # We should now be authorized
+    assert check_endpoint(client, apikey_value).raise_for_status()
+
 
 @pytest.mark.parametrize(
     "check_endpoint",
@@ -410,8 +494,11 @@ def test_state_changes(
         if switch_user_ok:
             mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, user_ok)
 
-        # If we switch the revoke or expired status: update the database
-        # as we had called the revoke or renew endpoints.
+        # If we switch the revoke or expired status: update the database fields as if we
+        # had called the revoke or renew endpoints.
+        #
+        # WARNING: don't change the "user_active" field because it is not updated by the
+        # revoke and renew endpoints, but by the check endpoint which we want to test here.
         if switch_revoked or switch_expired:
             values = {}
             if switch_revoked:

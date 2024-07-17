@@ -230,15 +230,15 @@ def get_api_key_usage_logs(
         UsageLog(
             api_key=row[0],
             name=row[1],
-            is_active=row[3],
-            never_expire=row[4],
-            expiration_date=row[5],
-            latest_query_date=row[6],
-            total_queries=row[7],
-            latest_sync_date=row[8],
-            iam_roles=row[9],
-            config=row[10],
-            allowed_referers=row[11],
+            is_active=row[4],
+            never_expire=row[5],
+            expiration_date=row[6],
+            latest_query_date=row[7],
+            total_queries=row[8],
+            latest_sync_date=row[9],
+            iam_roles=row[10],
+            config=row[11],
+            allowed_referers=row[12],
         )
         for row in apikey_crud.get_usage_stats(auth_info.user_id)
     ]
@@ -249,12 +249,13 @@ class CheckKey(BaseModel):
     iam_roles: list | None
     config: dict | None
 
+
 def custom_rate_limiter(func):
     """Customize the rate_limiter depending on our configuration."""
     # If the env variable is not defined, don't use a rate limiter
     if not api_settings.rate_limit:
         return func
-    # Else return the check_api_key function decorated with 
+    # Else return the check_api_key function decorated with
     # the rate_limiter configured with our setting
     return rate_limiter.limit(api_settings.rate_limit)(func)
 

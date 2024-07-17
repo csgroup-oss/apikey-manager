@@ -254,9 +254,9 @@ def custom_rate_limiter(func):
     # If the env variable is not defined, don't use a rate limiter
     if not api_settings.rate_limit:
         return func
-    # Else return the rate_limiter decorator with our setting
-    dec = rate_limiter.limit(api_settings.rate_limit)(func)
-    return dec
+    # Else return the check_api_key function decorated with 
+    # the rate_limiter configured with our setting
+    return rate_limiter.limit(api_settings.rate_limit)(func)
 
 
 @router.get("/check_key", response_model=CheckKey)

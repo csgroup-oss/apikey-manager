@@ -39,7 +39,6 @@ from app.controllers.auth_controller import (
     api_key_header,
     api_key_query,
     oidc_auth,
-    rate_limiter,
 )
 from app.main import get_application
 from app.settings import ApiSettings
@@ -96,8 +95,14 @@ def fastapi_app(mocker, random_db_url):
         "app.controllers.auth_controller.apikey_crud", new=apikey_crud, autospec=False
     )
 
-    # Return the FastAPI application
-    yield get_application()
+    # Get the FastAPI application
+    app = get_application()
+
+    # Reset the rate limiter before each test.
+    # NOTE: maybe we need to mock this somehow for this test only so it doesn't impact other tests.
+    app.state.limiter.reset()
+
+    yield app
 
 
 @pytest.fixture
@@ -105,15 +110,6 @@ def client(fastapi_app):
     """Test the FastAPI application."""
     with TestClient(fastapi_app) as client:
         yield client
-
-
-@pytest.fixture(autouse=True)
-def reset_rate_limiter(mocker, fastapi_app):
-    """
-    Reset the rate limiter before each test.
-    NOTE: maybe we need to mock this somehow for this test only so it doesn't impact other tests.
-    """
-    rate_limiter.reset()
 
 
 def mock_keycloak_info(
@@ -415,6 +411,7 @@ def test_state_changes(
             mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, user_ok)
 
         # If we switch the revoke or expired status: update the database
+        # as we had called the revoke or renew endpoints.
         if switch_revoked or switch_expired:
             values = {}
             if switch_revoked:

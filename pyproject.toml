@@ -36,11 +36,11 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-cov",
+    "pytest-docker",
     "pytest-html",
     "pytest-mock",
     "requests",
     "twine",
-    "pytest-docker"
 ]
 
 postgres = [

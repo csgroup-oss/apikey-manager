@@ -6,18 +6,21 @@ RUN addgroup -S app && adduser app -S -G app && chown app /home/app
 USER app
 
 ENV PATH=$PATH:/home/app/.local/bin
-ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1
+ARG SETUPTOOLS_SCM_PRETEND_VERSION
+RUN test -n "$SETUPTOOLS_SCM_PRETEND_VERSION" || \
+    ( echo -e "\n'--build-arg SETUPTOOLS_SCM_PRETEND_VERSION=<version>' is mandatory !" && exit 2 )
 
 WORKDIR /home/app/
 
 COPY --chown=app:app pyproject.toml   .
 COPY --chown=app:app setup.py         .
 COPY --chown=app:app app/__init__.py  app/
-COPY --chown=app:app app/_version.py  app/
 COPY --chown=app:app log_config.yaml  .
 
+# Install dependencies and create the app/_version.py file with setuptools_scm
 USER root
 RUN pip install --root-user-action=ignore --no-cache-dir .[postgres]
+RUN chown app:app app/_version.py
 
 FROM build as test
 ARG TEST_COMMAND=tox

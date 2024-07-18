@@ -1,0 +1,88 @@
+# Copyright 2023-2024, CS GROUP - France, https://www.csgroup.eu/
+#
+# This file is part of APIKeyManager project
+#     https://github.com/csgroup-oss/apikey-manager/
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Publish Docker images and helm charts
+
+# Run workflow only for ...
+on:
+  push:
+    tags:
+      - "**" # new git tags (including hierarchical tags like v1.0/beta)
+  workflow_dispatch: # manual trigger
+    inputs:
+      other_docker_tag:
+        description: "Other Docker image tag to use (1st tag: last git commit hash)"
+        required: false
+
+env:
+  PYTHON_VERSION: 3.11
+  DOCKER_REGISTRY: ghcr.io
+
+jobs:
+  # Calculate variables for this workflow
+  set-env:
+    runs-on: ubuntu-latest
+    name: "Set environment"
+    outputs:
+      tag_version: ${{ steps.set-env.outputs.tag_version }}
+      other_docker_tag: ${{ steps.set-env.outputs.other_docker_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install-python
+      - id: set-env
+        name: "Set environment"
+        run: |
+          set -x
+
+          # Deduce automatically the tag version from the last git tag or commit hash
+          rm -f app/_version.py
+          # This creates the _version.py file with the version deduced by setuptools_scm
+          pip install --root-user-action=ignore --no-cache-dir .
+          # Read the version from this file
+          tag_version=$(python -c "from app._version import __version__; print(__version__)")
+          rm -f app/_version.py
+
+          # When pushing a git tag, also use the docker tag :latest
+          if [[ ${{ github.event_name }} == push ]]; then
+            other_docker_tag=latest
+
+          # Else try to get the version number from the user input of the manuel trigger
+          else
+            other_docker_tag=${{ github.event.inputs.other_docker_tag }}
+          fi
+
+          # Save values
+          echo "tag_version=$tag_version" >> $GITHUB_OUTPUT
+          echo "other_docker_tag=$other_docker_tag" >> $GITHUB_OUTPUT
+
+        shell: bash
+
+  docker-image:
+    runs-on: ubuntu-latest
+    name: "Docker image"
+    needs: [set-env]
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/publish-docker
+        with:
+          dockerfile: ./Dockerfile
+          build_context_path: ./
+          build-args: SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.set-env.outputs.tag_version }}
+          version_name: ${{ needs.set-env.outputs.tag_version }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          other_docker_tag: ${{ needs.set-env.outputs.other_docker_tag }}

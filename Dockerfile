@@ -31,8 +31,8 @@ WORKDIR /home/app/
 
 COPY --chown=app:app pyproject.toml   .
 COPY --chown=app:app setup.py         .
-COPY --chown=app:app app/__init__.py  app/
 COPY --chown=app:app log_config.yaml  .
+COPY --chown=app:app app/__init__.py  app/
 
 # Install dependencies and create the app/_version.py file with setuptools_scm
 USER root
@@ -46,6 +46,6 @@ RUN [ "$TEST_ENABLED" = "false" ] && echo "skipping tests" || eval "$TEST_COMMAN
 
 FROM build as ship
 WORKDIR /home/app/
-COPY --chown=app:app app/            app/
+COPY --chown=app:app app/ app/
 USER app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-config", "log_config.yaml"]

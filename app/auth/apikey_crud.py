@@ -26,6 +26,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -40,7 +41,6 @@ from sqlalchemy import (
     desc,
     select,
 )
-from fastapi import HTTPException
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from ..settings import api_settings as settings

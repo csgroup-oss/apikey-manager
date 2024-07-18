@@ -458,10 +458,6 @@ def test_state_changes(
     # Test only using the apikey passed by http header, it should be enough
     check_endpoint = CHECK_APIKEY_ENDPOINTS[0]
 
-    # Modify the refresh time in seconds to call keycloak again
-    apikey_crud.settings.keycloak_sync_freq = 0.01
-    time_to_sleep = 0.02
-
     # Mock the user info returned from keycloak, at first he's always enabled
     mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES1, True)
 
@@ -471,6 +467,7 @@ def test_state_changes(
     )
     response.raise_for_status()
     apikey_value = response.json()
+    debug_apikey()
 
     # At first the user is enabled, the apikey is not revoked and not expired
     old_user_ok = True
@@ -522,17 +519,28 @@ def test_state_changes(
                 )
                 conn.commit()
 
-        # To refresh from keycloak
-        time.sleep(time_to_sleep)
+        # Call the check apikey endpoint: the first time we refresh the cached apikey
+        # information coming from keycloak, the second time we use the cache.
+        for refresh_cache in [True, False]:
 
-        # Call the check apikey endpoint.
-        # We should have a nominal response only if the user is enabled in keycloak,
-        # the apikey is active and non-expired.
-        debug_apikey()
-        response = check_endpoint(client, apikey_value)
-        debug_apikey()
-        if user_ok and (not revoked) and (not expired):
-            assert response.status_code == HTTP_200_OK
-            assert response.json()["iam_roles"] == IAM_ROLES1
-        else:
-            assert response.status_code == HTTP_403_FORBIDDEN
+            # Modify the time in seconds after which we will refresh the cache,
+            # then sleep enough so we will refresh the cache.
+            if refresh_cache:
+                apikey_crud.settings.keycloak_sync_freq = 0.01
+                time.sleep(0.02)
+
+            # Use any big enough value so we won't refresh the cache
+            else:
+                apikey_crud.settings.keycloak_sync_freq = 60
+
+            # Call the check apikey endpoint
+            response = check_endpoint(client, apikey_value)
+            debug_apikey()
+
+            # We should have a nominal response only if the user is enabled in keycloak,
+            # the apikey is active and non-expired.
+            if user_ok and (not revoked) and (not expired):
+                assert response.status_code == HTTP_200_OK
+                assert response.json()["iam_roles"] == IAM_ROLES1
+            else:
+                assert response.status_code == HTTP_403_FORBIDDEN

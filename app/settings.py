@@ -33,23 +33,25 @@ class ApiSettings(BaseSettings):
     cors_allow_methods: str = "GET"
 
     database_url: str = "sqlite:///./test.db"
-    default_apikey_ttl_hour: int = 15 * 24  # in hour
+    default_apikey_ttl_hour: int = 15 * 24  # in hours
 
+    # Admin client id and secret used for oauth2 operations.
+    # The client must have have the real_management/view_users
+    # and "implicit" flow privileges.
     oidc_endpoint: str = ""
     oidc_realm: str = ""
     oidc_client_id: str = ""
+    oidc_client_secret: str = ""
 
     # Rate limiter configuration for the check apikey endpoint: after too many requests,
     # the user will receive an error: 429 Too Many Requests
     # This configuration can be e.g. "20/minute" or "100/hour" or "2000/day" ...
     rate_limit: str = "20/minute"
 
-    # Admin client id and secret used for oauth2 operations.
-    # The client must have have the real_management/view_users
-    # and "implicit" flow privileges.
-    #  -1 means no sync
-    keycloak_sync_freq: int = 5 * 60
-    oidc_client_secret: str = ""
+    # Time after which we refresh, in the database,
+    # the cached apikey information coming from keycloak.
+    # -1 means no sync.
+    keycloak_sync_freq: int = 5 * 60  # in seconds
 
     # Show endpoints in the openapi swagger ?
     show_technical_endpoints: bool = False

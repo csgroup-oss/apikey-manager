@@ -25,6 +25,7 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
+    "bandit",
     "black",
     "flake8",
     "flake8-quotes",
@@ -37,9 +38,11 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-docker",
+    "pytest-error-for-skips",
     "pytest-html",
     "pytest-mock",
     "requests",
+    "safety",
     "twine",
 ]
 
@@ -88,3 +91,6 @@ profile = "black"
 
 [tool.check-manifest]
 ignore = [".vscode/*", "Dockerfile"]
+
+[tool.bandit.assert_used]
+skips = ['*/test_*.py']

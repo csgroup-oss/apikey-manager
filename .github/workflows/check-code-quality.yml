@@ -1,0 +1,117 @@
+
+name: Check code quality
+
+on:
+  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: 3.12
+
+jobs:
+
+  check-format:
+    runs-on: ubuntu-latest
+    name: Check pre-commit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install-python
+      - run: >
+          echo
+          ":information_source: This job checks that you have run \`pre-commit run --all-files\` in
+          your local git repository before committing."
+          >> $GITHUB_STEP_SUMMARY
+      - uses: pre-commit/action@v3.0.1
+
+  check-license:
+    runs-on: ubuntu-latest
+    name: Check copyright license headers
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          docker run -v ${{ github.workspace }}:/src ghcr.io/google/addlicense -check .
+
+  check-security:
+    runs-on: ubuntu-latest
+    name: Check security (bandit, safety, trivy)
+    # continue-on-error: true # run other jobs, resolve issues later
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/pip-install
+
+      - id: bandit
+        name: Run bandit
+        if: always() # even if previous steps returned a non-zero exit code
+        run: |
+          set -x
+          python -m bandit -c pyproject.toml -r .
+        shell: bash
+
+      - id: safety
+        name: Run safety
+        if: always()
+        run: python -m safety check --full-report
+        shell: bash
+
+      - name: Run Trivy vulnerability scanner
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-results-fs.sarif
+          exit-code: 1
+          #severity: 'CRITICAL'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results-fs.sarif
+          category: git repository
+
+      - name: "Display link to Trivy results"
+        if: always()
+        run: |
+
+          set -x
+
+          # If this is not a pull request, the query is "is:open+branch:branch_name"
+          if [[ "${{ github.ref_name }}" != *merge* ]]; then
+            query="is:open+branch:${{ github.ref_name }}"
+
+          # Else the ref_name is e.g. '13/merge'. Change it into 'pr:13'
+          else
+            query=$(sed "s|\(.*\)/merge|pr:\1|g" <<< "${{ github.ref_name }}")
+          fi
+
+          echo "Trivy scan results:" \
+          "https://github.com/${{ github.repository }}/security/code-scanning?query=${query}" \
+          >> $GITHUB_STEP_SUMMARY
+        shell: bash
+
+  pytests:
+    runs-on: ubuntu-latest
+    name: Run pytest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/pip-install
+
+      - name: Run pytest
+        run: |
+          set -x && python -m pytest ./tests \
+            --durations=0 \
+            --error-for-skips \
+            --cov=./app \
+            --cov-report=term \
+            --cov-report=xml:./cov-report.xml \
+        shell: bash
+
+      - name: Display code coverage summary in this console
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with: # see https://github.com/marketplace/actions/code-coverage-summary#inputs
+          filename: ./cov-report.xml

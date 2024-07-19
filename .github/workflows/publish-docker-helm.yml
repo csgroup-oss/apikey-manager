@@ -47,25 +47,12 @@ env:
   DOCKER_REGISTRY: ghcr.io
 
 jobs:
-  mytest:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo github.event_name: ${{ github.event_name }}
-          echo github.event_name: ${{ github.event_name == 'push' }}
-          echo inputs.publish_helm: ${{ inputs.publish_helm }}
-          echo inputs.publish_helm: ${{ inputs.publish_helm == 'true' }}
-          echo inputs.publish_docker: ${{ inputs.publish_docker }}
-          echo inputs.publish_docker: ${{ inputs.publish_docker == 'true' }}
-          echo ${{ github.event_name == 'push' || inputs.publish_helm == 'true' || inputs.publish_docker == 'true' }}
-        shell: bash
-
   # Calculate variables for this workflow
   set-env:
     runs-on: ubuntu-latest
     name: "Set environment"
     # If we push a git tag, or if we publish manually the docker image or helm chart
-    if: ${{ github.event_name == 'push' || inputs.publish_helm == true || inputs.publish_docker == true }}
+    if: ${{ github.event_name == 'push' || inputs.publish_helm == 'true' || inputs.publish_docker == 'true' }}
     outputs:
       tag_version: ${{ steps.set-env.outputs.tag_version }}
       other_docker_tag: ${{ steps.set-env.outputs.other_docker_tag }}
@@ -106,7 +93,7 @@ jobs:
     needs: [set-env]
     permissions: write-all
     # If we push a git tag, or if we publish manually the docker image
-    if: ${{ github.event_name == 'push' || inputs.publish_docker == true }}
+    if: ${{ github.event_name == 'push' || inputs.publish_docker == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/publish-docker
@@ -124,7 +111,7 @@ jobs:
     needs: [set-env]
     permissions: write-all
     # If we push a git tag, or if we publish manually the helm chart
-    if: ${{ github.event_name == 'push' || inputs.publish_helm == true }}
+    if: ${{ github.event_name == 'push' || inputs.publish_helm == 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:

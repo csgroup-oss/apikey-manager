@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Publish Docker images and helm charts
+name: Publish Docker image and helm chart
 
 # Run workflow only for ...
 on:
@@ -24,8 +24,22 @@ on:
       - "**" # new git tags (including hierarchical tags like v1.0/beta)
   workflow_dispatch: # manual trigger
     inputs:
+      publish_helm:
+        description: "Publish Helm chart ?"
+        type: choice
+        required: true
+        options:
+          - false
+          - true
+      publish_docker:
+        description: "Publish Docker image ?"
+        type: choice
+        required: true
+        options:
+          - false
+          - true
       other_docker_tag:
-        description: "Other Docker image tag to use (1st tag: last git commit hash)"
+        description: "2nd Docker image tag to use (1st tag = last git commit hash)"
         required: false
 
 env:
@@ -37,6 +51,7 @@ jobs:
   set-env:
     runs-on: ubuntu-latest
     name: "Set environment"
+    if: ${{ inputs.publish_helm == true || inputs.publish_docker == true }}
     outputs:
       tag_version: ${{ steps.set-env.outputs.tag_version }}
       other_docker_tag: ${{ steps.set-env.outputs.other_docker_tag }}
@@ -76,6 +91,7 @@ jobs:
     name: "Docker image"
     needs: [set-env]
     permissions: write-all
+    if: ${{ inputs.publish_docker == true }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/publish-docker

@@ -47,6 +47,19 @@ env:
   DOCKER_REGISTRY: ghcr.io
 
 jobs:
+  mytest:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo github.event_name: ${{ github.event_name }}
+          echo github.event_name: ${{ github.event_name == 'push' }}
+          echo inputs.publish_helm: ${{ inputs.publish_helm }}
+          echo inputs.publish_helm: ${{ inputs.publish_helm == true }}
+          echo inputs.publish_docker: ${{ inputs.publish_docker }}
+          echo inputs.publish_docker: ${{ inputs.publish_docker == true }}
+          echo ${{ github.event_name == 'push' || inputs.publish_helm == true || inputs.publish_docker == true }}
+        shell: bash
+
   # Calculate variables for this workflow
   set-env:
     runs-on: ubuntu-latest

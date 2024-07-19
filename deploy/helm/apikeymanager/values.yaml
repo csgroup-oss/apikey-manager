@@ -45,8 +45,7 @@ config:
   keycloak_sync_freq: 300
   # -- Show technical endoints (health)
   show_technical_endpoints: false
-  # -- If False (default): use the OpenIdConnect authentication.
-  # -- If True: use the authlib OAuth authentication instead.
+  # -- If False (default): use the OpenIdConnect authentication. If True: use the authlib OAuth authentication instead.
   use_authlib_oauth: false
   # -- Description displayed in the swagger front page
   swagger_description: "APIKeyManager is a centralized Python-oriented API Key manager."
@@ -56,9 +55,7 @@ config:
   contact_url: "https://github.com/csgroup-oss/apikey-manager/"
   # -- Contact email displayed in the swagger front page
   contact_email: "support@csgroup.space"
-  # -- By default, the openapi.json file is under /openapi.json
-  # -- If e.g. Ingress redirects the root domain URL to /docs, it also needs
-  # -- to have the openapi.json file under /docs/openapi.json
+  # -- The URL where the OpenAPI schema will be served from
   openapi_url: "/openapi.json"
 
 # -- 

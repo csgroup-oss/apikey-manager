@@ -65,7 +65,7 @@ uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_conf
 | APIKM_CONTACT_NAME | Contact name displayed in the swagger front page | `"CS Group France"`     |
 | APIKM_CONTACT_URL | Contact url displayed in the swagger front page | `"https://github.com/csgroup-oss/apikey-manager/"` |
 | APIKM_CONTACT_EMAIL | Contact email displayed in the swagger front page | `"support@csgroup.space"` |
-| APIKM_OPENAPI_URL | By default, the `openapi.json` file is under `/openapi.json`.<br>If e.g. Ingress redirects the root domain URL to `/docs`,<br>it also needs to have the openapi.json file under `/docs/openapi.json` | `"/openapi.json"` |
+| APIKM_OPENAPI_URL | The URL where the OpenAPI schema will be served from | `"/openapi.json"` |
 
 ### Endpoints
 

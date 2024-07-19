@@ -33,12 +33,6 @@ fastAPI_logger = logger  # convenient name
 
 
 def get_application() -> FastAPI:
-    # tags_metadata = [
-    #     {
-    #         "name": "apikeymanager",
-    #         "description": "Operations with users. The **login** logic is also here.",
-    #     },
-    # ]
     tags_metadata = None
 
     application = FastAPI(

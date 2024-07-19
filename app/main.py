@@ -25,11 +25,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from ._version import __version__
 from .auth import authlib_oauth
 from .controllers import auth_router, example_router, health_router
 from .settings import api_settings, rate_limiter
-
-from ._version import __version__
 
 fastAPI_logger = logger  # convenient name
 

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=5", "setuptools_scm[toml]>=7.1"]
+requires = ["setuptools>=5", "setuptools_scm[toml]>=8.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -27,6 +27,7 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
+    "bandit",
     "black",
     "flake8",
     "flake8-quotes",
@@ -38,11 +39,13 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-cov",
+    "pytest-docker",
+    "pytest-error-for-skips",
     "pytest-html",
     "pytest-mock",
     "requests",
+    "safety",
     "twine",
-    "pytest-docker"
 ]
 
 postgres = [
@@ -90,3 +93,6 @@ profile = "black"
 
 [tool.check-manifest]
 ignore = [".vscode/*", "Dockerfile"]
+
+[tool.bandit.assert_used]
+skips = ['*/test_*.py']

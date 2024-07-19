@@ -150,7 +150,7 @@ async def get_new_api_key(
     config: Annotated[
         Json,
         Query(
-            description="Allowed hosts that can use this API Key",
+            description="Free JSON object that can be used to configure services",
         ),
     ] = None,
     allowed_referers: Annotated[
@@ -245,15 +245,15 @@ def get_api_key_usage_logs(
             api_key=row[0],
             name=row[1],
             user_login=row[3],
-            is_active=row[4],
-            never_expire=row[5],
-            expiration_date=row[6],
-            latest_query_date=row[7],
-            total_queries=row[8],
-            latest_sync_date=row[9],
-            iam_roles=row[10],
-            config=row[11],
-            allowed_referers=row[12],
+            is_active=row[5],
+            never_expire=row[6],
+            expiration_date=row[7],
+            latest_query_date=row[8],
+            total_queries=row[9],
+            latest_sync_date=row[10],
+            iam_roles=row[11],
+            config=row[12],
+            allowed_referers=row[13],
         )
         for row in apikey_crud.get_usage_stats(auth_info.user_id)
     ]
@@ -266,8 +266,18 @@ class CheckKey(BaseModel):
     config: dict | None
 
 
+def custom_rate_limiter(func):
+    """Customize the rate_limiter depending on our configuration."""
+    # If the env variable is not defined, don't use a rate limiter
+    if not api_settings.rate_limit:
+        return func
+    # Else return the check_api_key function decorated with
+    # the rate_limiter configured with our setting
+    return rate_limiter.limit(api_settings.rate_limit)(func)
+
+
 @router.get("/check_key", response_model=CheckKey)
-@rate_limiter.limit("20/minute")
+@custom_rate_limiter
 async def check_api_key(
     request: Request,  # needed by the rate limiter
     query_param: Annotated[str, Security(api_key_query)],

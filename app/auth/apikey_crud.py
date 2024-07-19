@@ -66,8 +66,13 @@ class APIKeyCrud:
             meta,
             Column("api_key", String, primary_key=True, index=True),
             Column("name", String),
+            # User ID in keycloak
             Column("user_id", String, index=True, nullable=False),
             Column("user_login", String),
+            # Is the user active in keycloak ? True by defulat, because
+            # to create an apikey, the user must be authenticated to keycloak.
+            Column("user_active", Boolean, default=True),
+            # Is the apikey active = not revoked manually ?
             Column("is_active", Boolean, default=True),
             Column("never_expire", Boolean, default=False),
             Column("expiration_date", DateTime),
@@ -162,7 +167,11 @@ class APIKeyCrud:
             conn.execute(
                 t.update()
                 .where(t.c.api_key == self.__hash(api_key))
-                .values(is_active=True, expiration_date=parsed_expiration_date)
+                .values(
+                    latest_sync_date=datetime.now(UTC),
+                    is_active=True,
+                    expiration_date=parsed_expiration_date,
+                )
             )
 
             conn.commit()
@@ -206,6 +215,7 @@ class APIKeyCrud:
                     t.c[
                         "user_id",
                         "user_login",
+                        "user_active",
                         "is_active",
                         "iam_roles",
                         "config",
@@ -222,6 +232,12 @@ class APIKeyCrud:
                 return None
 
             response = row._asdict()
+
+            # If the apikey has been revoked manually, then it can
+            # only be renewed manually.
+            if not response["is_active"]:
+                return None
+
             latest_sync_date = response["latest_sync_date"]
             # SQLite does not store timezone. Small warkaround
             if latest_sync_date.utcoffset() is None:
@@ -237,17 +253,17 @@ class APIKeyCrud:
                     t.update()
                     .where(t.c.api_key == self.__hash(api_key))
                     .values(
-                        is_active=kc_info.is_enabled,
+                        user_active=kc_info.is_enabled,
                         iam_roles=kc_info.roles,
                         latest_sync_date=datetime.now(UTC),
                     )
                 )
                 conn.commit()
 
-                response["is_active"] = kc_info.is_enabled
+                response["user_active"] = kc_info.is_enabled
                 response["iam_roles"] = kc_info.roles
 
-            if not response["is_active"]:
+            if not response["user_active"]:
                 # If user is not active anymore
                 return None
 

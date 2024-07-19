@@ -9,3 +9,5 @@ dist
 report.xml
 *.db
 build
+/app/_version.py
+*.orig

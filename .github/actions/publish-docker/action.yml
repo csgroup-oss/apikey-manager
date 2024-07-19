@@ -1,0 +1,141 @@
+# Copyright 2023-2024, CS GROUP - France, https://www.csgroup.eu/
+#
+# This file is part of APIKeyManager project
+#     https://github.com/csgroup-oss/apikey-manager/
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: publish-docker
+description: Publish Docker image
+
+inputs:
+  dockerfile:
+    description: Dockerfile path
+    required: true
+  build_context_path:
+    description: "'docker build' context path"
+    required: true
+  build-args:
+    description: List of build-time variables
+    required: false
+  image_suffix:
+    description: Docker image name suffix
+    required: false
+  version_name:
+    description: Version name e.g. 1.2.3a4.dev1a2b3c4d
+    required: true
+  github_token:
+    description: secrets.GITHUB_TOKEN
+    required: true
+  other_docker_tag:
+    description: Other tags for the docker images e.g. 'latest'
+    required: false
+
+outputs:
+  docker_image:
+    description: Docker image name:tag
+    value: ${{ steps.docker_image.outputs.docker_image }}
+
+runs:
+  using: "composite"
+  steps:
+    # Replace invalid characters in the Docker version name, e.g. 1.2.3a4+dev1a2b3c4d becomes 1.2.3a4.dev1a2b3c4d
+    # Then we can use ${{ inputs.docker_version_name }}
+    - run: echo "docker_version_name=$(echo ${{ inputs.version_name }} | tr + .)" >> $GITHUB_ENV
+      shell: bash
+
+    # Full Docker image name:tag as ghcr.io/csgroup-oss/apikey-manager<suffix>:<version> in lowercase
+    - id: docker_image
+      run: |
+        docker_image=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}${{ inputs.image_suffix }}:${{ env.docker_version_name }}
+        docker_image=${docker_image,,} # lowercase
+        echo docker_image=${docker_image} >> $GITHUB_ENV
+        echo docker_image=${docker_image} >> $GITHUB_OUTPUT
+      shell: bash
+
+    # Extract metadata from Git reference and GitHub events
+    - name: Extract Docker metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }} # ghcr.io/csgroup-oss/apikey-manager
+
+    # Checkout code from the current branch and build Docker image.
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.build_context_path }}
+        file: ${{ inputs.dockerfile }}
+        load: true
+        build-args: ${{ inputs.build-args }}
+        tags: ${{ env.docker_image }}
+        labels: ${{ steps.meta.outputs.labels }}
+        push: false # push after the security scans below
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.docker_image }}
+        format: sarif
+        output: trivy-results-docker.sarif
+        exit-code: 0
+        #severity: HIGH,CRITICAL
+        #timeout: '30m'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: trivy-results-docker.sarif
+        category: ${{ env.docker_image }}
+
+    - name: Display link to Trivy results
+      run: |
+
+        set -x
+
+        # If this is not a pull request, the query is "is:open+branch:branch_name"
+        if [[ "${{ github.ref_name }}" != *merge* ]]; then
+          query="is:open+branch:${{ github.ref_name }}"
+
+        # Else the ref_name is e.g. '13/merge'. Change it into 'pr:13'
+        else
+          query=$(sed "s|\(.*\)/merge|pr:\1|g" <<< "${{ github.ref_name }}")
+        fi
+
+        echo "Trivy scan results:" \
+        "https://github.com/${{ github.repository }}/security/code-scanning?query=${query}" \
+        >> $GITHUB_STEP_SUMMARY
+      shell: bash
+
+    - name: Log into Docker registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ inputs.github_token }}
+
+    - name: Push Docker image
+      run: docker push ${{ env.docker_image }}
+      shell: bash
+
+    # Add a docker image tag and push it into the registry.
+    - name: Push Docker tag e.g. 'latest'
+      if: always()
+      run: | # use sed to replace the last :<tag> by :other_docker_tag
+        set -x
+        if [[ ${{ inputs.other_docker_tag }}test != test ]]; then # if variable is defined and not empty
+          docker_image_tag=$(sed "s|\(:[^:]*\)|:${{ inputs.other_docker_tag }}|g" <<< ${{ env.docker_image }})
+          docker tag ${{ env.docker_image }} ${docker_image_tag}
+          docker push ${docker_image_tag}
+        fi
+      shell: bash

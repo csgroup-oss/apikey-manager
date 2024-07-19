@@ -73,6 +73,15 @@ class ApiSettings(BaseSettings):
         "APIKeyManager is a centralized Python-oriented API Key manager."
     )
 
+    # Contact name displayed in the swagger front page
+    contact_name: str = "CS Group France"
+
+    # Contact url displayed in the swagger front page
+    contact_url: str = "https://github.com/csgroup-oss/apikey-manager/"
+
+    # Contact email displayed in the swagger front page
+    contact_email: str = "support@csgroup.space"
+
     # By default, the openapi.json file is under /
     # If e.g. Ingress redirects the root domain URL to /docs, it also needs
     # to have the openapi.json file under /docs

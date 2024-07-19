@@ -42,9 +42,9 @@ def get_application() -> FastAPI:
         description=api_settings.swagger_description,
         version=__version__,
         contact={
-            "name": "CS Group France",
-            "url": "https://github.com/csgroup-oss/apikey-manager/",
-            "email": "support@csgroup.space",
+            "name": api_settings.contact_name,
+            "url": api_settings.contact_url,
+            "email": api_settings.contact_email,
         },
         openapi_url=api_settings.openapi_url,
         # If we use the authlib OAuth authentication, we override the /docs endpoint.

@@ -117,12 +117,33 @@ jobs:
         with:
           fetch-depth: 0 # fetch all history for all branches and tags.
 
+      - id: adapt_versioin
+        name: Adapt the version tag
+        shell: bash
+        run: |
+          set -x
+
+          # Version name calculated by setuptools_scm
+          tag_version=${{ needs.set-env.outputs.tag_version }}
+          chart_version="$tag_version"
+
+          # Without a git tag, the version will look like: x.y.devxx+gxxx.xxx
+          # We need 3 digits before .dev
+          chart_version=$(sed "s|^\([0-9]\.[0-9]\)\.dev|\1.0.dev|g" <<< $chart_version)
+
+          # And we need -dev instead of .dev
+          chart_version=$(sed "s|^\([0-9\.]\+\)\.dev|\1-dev|g" <<< $chart_version)
+
+          echo "APP_VERSION=$tag_version" >> $GITHUB_OUTPUT
+          echo "CHART_VERSION=$chart_version" >> $GITHUB_OUTPUT
+
       - name: Update version number in chart.yaml
         shell: bash
         run: |
+          set -x
           for chart in $(find deploy -name Chart.yaml); do
-            sed -i "s,{{APP_VERSION}},${{ needs.set-env.outputs.tag_version }}," $chart
-            sed -i "s,{{CHART_VERSION}},${{ needs.set-env.outputs.tag_version }}," $chart
+            sed -i "s,{{APP_VERSION}},${{ steps.adapt_versioin.outputs.APP_VERSION }}," $chart
+            sed -i "s,{{CHART_VERSION}},${{ steps.adapt_versioin.outputs.CHART_VERSION }}," $chart
           done
 
       - id: publish-chart

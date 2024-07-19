@@ -32,9 +32,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
+
       - uses: ./.github/actions/install-python
-      - name: Get the version tag
-        id: get_version
+
+      - id: get_version
+        name: Get the version tag
         shell: bash
         run: |
           set -x
@@ -49,14 +51,16 @@ jobs:
           tag_version=$(python -c "from app._version import __version__; print(__version__)")
           rm -f app/_version.py
 
-          echo "tag_version=$tag_version" >> $GITHUB_OUTPUT
+          echo "APP_VERSION=$tag_version" >> $GITHUB_OUTPUT
+          echo "CHART_VERSION=$tag_version" >> $GITHUB_OUTPUT
 
       - name: Update version number in chart.yaml
         shell: bash
         run: |
+          set -x
           for chart in $(find deploy -name Chart.yaml); do
-            sed -i "s,{{APP_VERSION}},${{ steps.get_version.outputs.tag_version }}," $chart
-            sed -i "s,{{CHART_VERSION}},${{ steps.get_version.outputs.tag_version }}," $chart
+            sed -i "s,{{APP_VERSION}},${{ steps.get_version.outputs.APP_VERSION }}," $chart
+            sed -i "s,{{CHART_VERSION}},${{ steps.get_version.outputs.CHART_VERSION }}," $chart
           done
 
       - name: Run helm-docs

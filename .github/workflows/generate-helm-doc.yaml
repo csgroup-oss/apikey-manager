@@ -13,18 +13,24 @@
 # limitations under the License.
 
 name: Generate Helm documentation
+
 on:
   - pull_request
+
+env:
+  PYTHON_VERSION: 3.11
+
 jobs:
   generate:
     runs-on: ubuntu-latest
+    name: Generate Helm documentation
     permissions: write-all
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-
-      - name: Get the rs-server version tag
+      - uses: ./.github/actions/install-python
+      - name: Get the version tag
         id: get_version
         shell: bash
         run: |

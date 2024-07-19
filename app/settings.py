@@ -82,9 +82,9 @@ class ApiSettings(BaseSettings):
     # Contact email displayed in the swagger front page
     contact_email: str = "support@csgroup.space"
 
-    # By default, the openapi.json file is under /
+    # By default, the openapi.json file is under /openapi.json
     # If e.g. Ingress redirects the root domain URL to /docs, it also needs
-    # to have the openapi.json file under /docs
+    # to have the openapi.json file under /docs/openapi.json
     openapi_url: str = "/openapi.json"
 
     auth_function: Callable | None = None

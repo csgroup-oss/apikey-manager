@@ -60,6 +60,12 @@ uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_conf
 | APIKM_RATE_LIMIT               | Rate limiter configuration for the check apikey endpoint           | `20/minute`             |
 | APIKM_KEYCLOAK_SYNC_FREQ       | Sync frequency of a user with data stored in Keycloak (in seconds) | `300`                   |
 | APIKM_SHOW_TECHNICAL_ENDPOINTS | Show technical endoints (health)                                   | `False`                 |
+| APIKM_USE_AUTHLIB_OAUTH        | If False: use the OpenIdConnect authentication.<br>If True: use the authlib OAuth authentication instead. | `False` |
+| APIKM_SWAGGER_DESCRIPTION | Description displayed in the swagger front page | `"APIKeyManager is a centralized Python-oriented API Key manager"` |
+| APIKM_CONTACT_NAME | Contact name displayed in the swagger front page | `"CS Group France"`     |
+| APIKM_CONTACT_URL | Contact url displayed in the swagger front page | `"https://github.com/csgroup-oss/apikey-manager/"` |
+| APIKM_CONTACT_EMAIL | Contact email displayed in the swagger front page | `"support@csgroup.space"` |
+| APIKM_OPENAPI_URL | By default, the `openapi.json` file is under `/openapi.json`.<br>If e.g. Ingress redirects the root domain URL to `/docs`,<br>it also needs to have the openapi.json file under `/docs/openapi.json` | `"/openapi.json"` |
 
 ### Endpoints
 

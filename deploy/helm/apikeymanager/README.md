@@ -1,6 +1,6 @@
 # apikeymanager
 
-![Version: 0.1.dev1+gf7f40d6](https://img.shields.io/badge/Version-0.1.dev1+gf7f40d6-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.dev1+gf7f40d6](https://img.shields.io/badge/AppVersion-0.1.dev1+gf7f40d6-informational?style=flat-square)
+![Version: 0.1.dev1+gbe9a2c8](https://img.shields.io/badge/Version-0.1.dev1+gbe9a2c8-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.dev1+gbe9a2c8](https://img.shields.io/badge/AppVersion-0.1.dev1+gbe9a2c8-informational?style=flat-square)
 
 Helm chart for APIKeyManager
 
@@ -28,12 +28,12 @@ Helm chart for APIKeyManager
 | config.oidc_client_secret | string | `""` | OIDC Secret used to sync user info from Keycloak |
 | config.oidc_endpoint | string | `""` | OIDC End Point |
 | config.oidc_realm | string | `""` | OIDC Realm |
-| config.openapi_url | string | `"/openapi.json"` | to have the openapi.json file under /docs/openapi.json |
+| config.openapi_url | string | `"/openapi.json"` | The URL where the OpenAPI schema will be served from |
 | config.rate_limit | string | `"20/minute"` | Rate limiter configuration for the check apikey endpoint |
 | config.root_path | string | `""` | API root path |
 | config.show_technical_endpoints | bool | `false` | Show technical endoints (health) |
 | config.swagger_description | string | `"APIKeyManager is a centralized Python-oriented API Key manager."` | Description displayed in the swagger front page |
-| config.use_authlib_oauth | bool | `false` | If True: use the authlib OAuth authentication instead. |
+| config.use_authlib_oauth | bool | `false` | If False (default): use the OpenIdConnect authentication. If True: use the authlib OAuth authentication instead. |
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.repository | string | `"ghcr.io/csgroup-oss/apikey-manager"` | Image repository |

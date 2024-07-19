@@ -1,36 +1,41 @@
 # apikeymanager
 
-![Version: 0.1.dev1+gb6c8a83](https://img.shields.io/badge/Version-0.1.dev1+gb6c8a83-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.dev1+gb6c8a83](https://img.shields.io/badge/AppVersion-0.1.dev1+gb6c8a83-informational?style=flat-square)
+![Version: 0.1.dev1+g5094a49](https://img.shields.io/badge/Version-0.1.dev1+g5094a49-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.dev1+g5094a49](https://img.shields.io/badge/AppVersion-0.1.dev1+g5094a49-informational?style=flat-square)
 
 Helm chart for APIKeyManager
+
+## Maintainers
+
+| Name | Email | Url |
+| ---- | ------ | --- |
+| CS GROUP |  | <https://github.com/csgroup-oss/apikey-manager> |
 
 ## Values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | affinity | object | `{}` |  |
-| config.cors_allow_methods | string | `"GET"` |  |
-| config.cors_origins_regex | string | `""` |  |
-| config.database_url | string | `"sqlite:///./test.db"` |  |
-| config.debug | bool | `false` |  |
-| config.default_apikey_ttl_hour | int | `900` |  |
-| config.keycloak_sync_freq | int | `-1` |  |
-| config.oidc_client_id | string | `""` |  |
-| config.oidc_client_secret | string | `""` |  |
-| config.oidc_endpoint | string | `""` |  |
-| config.oidc_realm | string | `""` |  |
-| config.rate_limit | string | `"20/minute"` |  |
-| config.root_path | string | `""` |  |
-| config.show_technical_endpoints | bool | `true` |  |
-| env | list | `[]` |  |
+| config.cors_allow_methods | string | `"GET"` | Allow CORS for methods |
+| config.cors_origins_regex | string | `".*"` | Allow CORS from (regexp) |
+| config.database_url | string | `"sqlite:///./test.db"` | Database to store API Keys |
+| config.debug | bool | `false` | DEBUG mode (display SQL queries) |
+| config.default_apikey_ttl_hour | int | `360` | Default lifetime of an API Key (in hour) |
+| config.keycloak_sync_freq | int | `300` | Sync frequency of a user with data stored in Keycloak (in seconds) |
+| config.oidc_client_id | string | `""` | OIDC CLient ID |
+| config.oidc_client_secret | string | `""` | OIDC Secret used to sync user info from Keycloak |
+| config.oidc_endpoint | string | `""` | OIDC End Point |
+| config.oidc_realm | string | `""` | OIDC Realm |
+| config.rate_limit | string | `"20/minute"` | Rate limiter configuration for the check apikey endpoint |
+| config.root_path | string | `""` | API root path |
+| config.show_technical_endpoints | bool | `false` | Show technical endoints (health) |
 | fullnameOverride | string | `""` |  |
-| image.pullPolicy | string | `"IfNotPresent"` |  |
-| image.repository | string | `"643vlk6z.gra7.container-registry.ovh.net/metis/apikeymanager"` |  |
-| image.tag | string | `"latest"` |  |
-| imagePullSecrets | list | `[]` |  |
+| image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
+| image.repository | string | `"ghcr.io/csgroup-oss/apikey-manager"` | Image repository |
+| image.tag | string | `"latest"` | Image tag |
+| imagePullSecrets[0] | object | `{"name":"ghcr-k8s"}` | Image pull secrets |
 | ingress.annotations | object | `{}` |  |
 | ingress.className | string | `""` |  |
-| ingress.enabled | bool | `false` |  |
+| ingress.enabled | bool | `false` | Enabled/Disable ingress |
 | ingress.hosts[0].host | string | `"chart-example.local"` |  |
 | ingress.hosts[0].paths[0].path | string | `"/"` |  |
 | ingress.hosts[0].paths[0].pathType | string | `"ImplementationSpecific"` |  |

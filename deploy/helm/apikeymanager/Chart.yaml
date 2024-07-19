@@ -39,3 +39,7 @@ version: {{CHART_VERSION}}
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
 appVersion: {{APP_VERSION}}
+
+maintainers:
+  - name: CS GROUP
+    url: https://github.com/csgroup-oss/apikey-manager

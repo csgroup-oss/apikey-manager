@@ -49,7 +49,7 @@ uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_conf
 | APIKM_NAME                     | Application name                                                   | `"API-Key Manager"`     |
 | APIKM_ROOT_PATH                | API root path                                                      | `""`                    |
 | APIKM_DEBUG                    | DEBUG mode (display SQL queries)                                   | `False`                 |
-| APIKM_CORS_ORIGINS_REGEX       | Allow CORS from (regexp)                                           | `""`                    |
+| APIKM_CORS_ORIGINS_REGEX       | Allow CORS from (regexp)                                           | `".*"`                  |
 | APIKM_CORS_ALLOW_METHODS       | Allow CORS for methods                                             | `"GET"`                 |
 | APIKM_DATABASE_URL             | Database to store API Keys                                         | `"sqlite:///./test.db"` |
 | APIKM_DEFAULT_APIKEY_TTL_HOUR  | Default lifetime of an API Key (in hour)                           | `360`                   |
@@ -59,7 +59,7 @@ uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_conf
 | APIKM_OIDC_CLIENT_SECRET       | OIDC Secret used to sync user info from Keycloak                   | `""`                    |
 | APIKM_RATE_LIMIT               | Rate limiter configuration for the check apikey endpoint           | `20/minute`             |
 | APIKM_KEYCLOAK_SYNC_FREQ       | Sync frequency of a user with data stored in Keycloak (in seconds) | `300`                   |
-| APIKM_SHOW_TECHNICAL_ENDPOINTS | Show technical endoints (health)                                   | `True`                  |
+| APIKM_SHOW_TECHNICAL_ENDPOINTS | Show technical endoints (health)                                   | `False`                 |
 
 ### Endpoints
 

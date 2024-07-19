@@ -51,7 +51,8 @@ jobs:
   set-env:
     runs-on: ubuntu-latest
     name: "Set environment"
-    if: ${{ inputs.publish_helm == true || inputs.publish_docker == true }}
+    # If we push a git tag, or if we publish manually the docker image or helm chart
+    if: ${{ github.event_name == 'push' || inputs.publish_helm == true || inputs.publish_docker == true }}
     outputs:
       tag_version: ${{ steps.set-env.outputs.tag_version }}
       other_docker_tag: ${{ steps.set-env.outputs.other_docker_tag }}
@@ -91,7 +92,8 @@ jobs:
     name: "Docker image"
     needs: [set-env]
     permissions: write-all
-    if: ${{ inputs.publish_docker == true }}
+    # If we push a git tag, or if we publish manually the docker image
+    if: ${{ github.event_name == 'push' || inputs.publish_docker == true }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/publish-docker
@@ -102,3 +104,29 @@ jobs:
           version_name: ${{ needs.set-env.outputs.tag_version }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           other_docker_tag: ${{ needs.set-env.outputs.other_docker_tag }}
+
+  helm-chart:
+    runs-on: ubuntu-latest
+    name: "Helm chart"
+    needs: [set-env]
+    permissions: write-all
+    # If we push a git tag, or if we publish manually the helm chart
+    if: ${{ github.event_name == 'push' || inputs.publish_helm == true }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch all history for all branches and tags.
+
+      - name: Update version number in chart.yaml
+        shell: bash
+        run: |
+          for chart in $(find deploy -name Chart.yaml); do
+            sed -i "s,{{APP_VERSION}},${{ needs.set-env.outputs.tag_version }}," $chart
+            sed -i "s,{{CHART_VERSION}},${{ needs.set-env.outputs.tag_version }}," $chart
+          done
+
+      - id: publish-chart
+        name: Publish Helm chart
+        uses: ./.github/actions/publish-chart
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,7 @@
-# Copyright 2024 CS Group
+# Copyright 2023-2024, CS GROUP - France, https://www.csgroup.eu/
+#
+# This file is part of APIKeyManager project
+#     https://github.com/csgroup-oss/apikey-manager/
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,15 +49,14 @@ jobs:
           tag_version=$(python -c "from app._version import __version__; print(__version__)")
           rm -f app/_version.py
 
-          echo "APP_VERSION=$tag_version" >> $GITHUB_OUTPUT
-          echo "CHART_VERSION=$tag_version" >> $GITHUB_OUTPUT
+          echo "tag_version=$tag_version" >> $GITHUB_OUTPUT
 
       - name: Update version number in chart.yaml
         shell: bash
         run: |
           for chart in $(find deploy -name Chart.yaml); do
-            sed -i "s,{{APP_VERSION}},${{ steps.get_version.outputs.APP_VERSION }}," $chart
-            sed -i "s,{{CHART_VERSION}},${{ steps.get_version.outputs.CHART_VERSION }}," $chart
+            sed -i "s,{{APP_VERSION}},${{ steps.get_version.outputs.tag_version }}," $chart
+            sed -i "s,{{CHART_VERSION}},${{ steps.get_version.outputs.tag_version }}," $chart
           done
 
       - name: Run helm-docs

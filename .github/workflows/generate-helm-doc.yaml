@@ -1,0 +1,58 @@
+# Copyright 2024 CS Group
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Generate Helm documentation
+on:
+  - pull_request
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Get the rs-server version tag
+        id: get_version
+        shell: bash
+        run: |
+          set -x
+          # Enable pipefail so git command failures do not result in null versions downstream
+          set -euo pipefail
+
+          # Deduce automatically the tag version from the last git tag or commit hash
+          rm -f app/_version.py
+          # This creates the _version.py file with the version deduced by setuptools_scm
+          pip install --root-user-action=ignore --no-cache-dir .
+          # Read the version from this file
+          tag_version=$(python -c "from app._version import __version__; print(__version__)")
+          rm -f app/_version.py
+
+          echo "APP_VERSION=$tag_version" >> $GITHUB_OUTPUT
+          echo "CHART_VERSION=$tag_version" >> $GITHUB_OUTPUT
+
+      - name: Update version number in chart.yaml
+        shell: bash
+        run: |
+          for chart in $(find deploy -name Chart.yaml); do
+            sed -i "s,{{APP_VERSION}},${{ steps.get_version.outputs.APP_VERSION }}," $chart
+            sed -i "s,{{CHART_VERSION}},${{ steps.get_version.outputs.CHART_VERSION }}," $chart
+          done
+
+      - name: Run helm-docs
+        uses: losisin/helm-docs-github-action@v1.1.4
+        with:
+          git-push: true
+          chart-search-root: ./deploy

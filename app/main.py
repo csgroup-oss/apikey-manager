@@ -29,6 +29,8 @@ from .auth import authlib_oauth
 from .controllers import auth_router, example_router, health_router
 from .settings import api_settings, rate_limiter
 
+from ._version import __version__
+
 fastAPI_logger = logger  # convenient name
 
 
@@ -38,7 +40,7 @@ def get_application() -> FastAPI:
     application = FastAPI(
         title=api_settings.name,
         description=api_settings.swagger_description,
-        version="1.0.0",
+        version=__version__,
         contact={
             "name": "CS Group France",
             "url": "https://github.com/csgroup-oss/apikey-manager/",

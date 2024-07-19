@@ -129,4 +129,5 @@ jobs:
         name: Publish Helm chart
         uses: ./.github/actions/publish-chart
         with:
+          charts_dir: ./deploy
           github_token: ${{ secrets.GITHUB_TOKEN }}

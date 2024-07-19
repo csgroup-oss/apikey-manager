@@ -66,6 +66,8 @@ spec:
                 secretKeyRef:
                   key:  oidc_client_secret
                   name: {{ .Release.Name }}-auth
+            - name: "APIKM_RATE_LIMIT"
+              value: {{  .Values.config.rate_limit | quote }}
             - name: "APIKM_KEYCLOAK_SYNC_FREQ"
               value: {{  .Values.config.keycloak_sync_freq | quote }}
             - name: "APIKM_SHOW_TECHNICAL_ENDPOINTS"

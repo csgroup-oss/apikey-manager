@@ -13,10 +13,11 @@ config:
   default_apikey_ttl_hour: 900 # 15 days
   oidc_endpoint: ""
   oidc_realm: ""
-  oidc_client_id: ""
-  oidc_client_secret: ""
   # The client must have have the real_management/view_users
   # and "implicit" flow privileges.
+  oidc_client_id: ""
+  oidc_client_secret: ""
+  rate_limit: "20/minute"
   # -1 means no sync
   keycloak_sync_freq: -1
   show_technical_endpoints: true

@@ -57,6 +57,7 @@ uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_conf
 | APIKM_OIDC_REALM               | OIDC Realm                                                         | `""`                    |
 | APIKM_OIDC_CLIENT_ID           | OIDC CLient ID                                                     | `""`                    |
 | APIKM_OIDC_CLIENT_SECRET       | OIDC Secret used to sync user info from Keycloak                   | `""`                    |
+| APIKM_RATE_LIMIT               | Rate limiter configuration for the check apikey endpoint           | `20/minute`             |
 | APIKM_KEYCLOAK_SYNC_FREQ       | Sync frequency of a user with data stored in Keycloak (in seconds) | `300`                   |
 | APIKM_SHOW_TECHNICAL_ENDPOINTS | Show technical endoints (health)                                   | `True`                  |
 

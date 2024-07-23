@@ -21,6 +21,7 @@ import tempfile
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -252,6 +253,7 @@ def test_new_apikey(
         response.raise_for_status()
         usage_logs = response.json()
         assert len(usage_logs) == 2
+        print(json.dumps(usage_logs, indent=2))
 
 
 def test_revoke_renew(mocker, fastapi_app, client):

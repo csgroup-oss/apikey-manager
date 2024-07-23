@@ -164,10 +164,15 @@ class APIKeyCrud:
                             Please use ISO 8601.",
                     ) from exc
 
+            LOGGER.debug("Sync user info of `user_id` with KeyCLoak")
+            kc_info = self.kcutil.get_user_info(user_id)
+
             conn.execute(
                 t.update()
                 .where(t.c.api_key == self.__hash(api_key))
                 .values(
+                    user_active=kc_info.is_enabled,
+                    iam_roles=kc_info.roles,
                     latest_sync_date=datetime.now(UTC),
                     is_active=True,
                     expiration_date=parsed_expiration_date,

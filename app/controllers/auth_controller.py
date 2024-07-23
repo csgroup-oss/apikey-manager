@@ -216,6 +216,7 @@ class UsageLog(BaseModel):
     api_key: str | None = None
     name: str
     user_login: str
+    user_active: bool
     is_active: bool
     never_expire: bool
     expiration_date: datetime
@@ -245,6 +246,7 @@ def get_api_key_usage_logs(
             api_key=row[0],
             name=row[1],
             user_login=row[3],
+            user_active=row[4],
             is_active=row[5],
             never_expire=row[6],
             expiration_date=row[7],

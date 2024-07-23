@@ -21,6 +21,7 @@ import tempfile
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -262,6 +263,7 @@ def test_new_apikey(
         response.raise_for_status()
         usage_logs = response.json()
         assert len(usage_logs) == 2
+        print(json.dumps(usage_logs, indent=2))
 
 
 def test_revoke_renew(mocker, fastapi_app, client):
@@ -287,12 +289,17 @@ def test_revoke_renew(mocker, fastapi_app, client):
     # Check the apikey. We should have a 403 Unauthorize.
     assert check_endpoint(client, apikey_value).status_code == HTTP_403_FORBIDDEN
 
+    # In the meantime, if the user information changes in keycloak, the apikey should be updatd
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES2)
+
     # Renew it
     response = client.get("/auth/api_key/renew", params={"api-key": apikey_value})
     response.raise_for_status()
 
-    # We should now be authorized
-    assert check_endpoint(client, apikey_value).raise_for_status()
+    # We should now be authorized. Check the user info.
+    response = check_endpoint(client, apikey_value)
+    response.raise_for_status()
+    assert response.json()["iam_roles"] == IAM_ROLES2
 
 
 def test_expired_renew(mocker, fastapi_app, client):
@@ -324,6 +331,9 @@ def test_expired_renew(mocker, fastapi_app, client):
     # Check the apikey. We should have a 403 Unauthorize.
     assert check_endpoint(client, apikey_value).status_code == HTTP_403_FORBIDDEN
 
+    # In the meantime, if the user information changes in keycloak, the apikey should be updatd
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES2)
+
     # Renew it with a date in the future
     response = client.get(
         "/auth/api_key/renew",
@@ -334,8 +344,10 @@ def test_expired_renew(mocker, fastapi_app, client):
     )
     response.raise_for_status()
 
-    # We should now be authorized
-    assert check_endpoint(client, apikey_value).raise_for_status()
+    # We should now be authorized. Check the user info.
+    response = check_endpoint(client, apikey_value)
+    response.raise_for_status()
+    assert response.json()["iam_roles"] == IAM_ROLES2
 
 
 @pytest.mark.parametrize(

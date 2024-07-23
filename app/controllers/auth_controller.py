@@ -202,6 +202,7 @@ async def renew_api_key(
 class UsageLog(BaseModel):
     api_key: str | None = None
     name: str
+    user_active: bool
     is_active: bool
     never_expire: bool
     expiration_date: datetime
@@ -230,6 +231,7 @@ def get_api_key_usage_logs(
         UsageLog(
             api_key=row[0],
             name=row[1],
+            user_active=row[3],
             is_active=row[4],
             never_expire=row[5],
             expiration_date=row[6],

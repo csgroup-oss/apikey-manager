@@ -135,7 +135,7 @@ jobs:
           chart_version=$(sed "s|^\([0-9\.]\+\)\.dev|\1-dev|g" <<< $chart_version)
 
           # Replace + by .
-          chart_version=$(sed "s|+|.|g" <<< $chart_version)
+          # chart_version=$(sed "s|+|.|g" <<< $chart_version)
 
           echo "APP_VERSION=$tag_version" >> $GITHUB_OUTPUT
           echo "CHART_VERSION=$chart_version" >> $GITHUB_OUTPUT

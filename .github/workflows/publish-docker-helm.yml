@@ -137,6 +137,12 @@ jobs:
         with:
           fetch-depth: 0 # fetch all history for all branches and tags.
 
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Update helm chart.yaml and values.yaml
         shell: bash
         run: |
@@ -160,8 +166,6 @@ jobs:
           fi
 
           # Commit and push the updated files
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "Update version in helm chart" || true
           git push

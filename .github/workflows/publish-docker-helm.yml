@@ -150,7 +150,9 @@ jobs:
           # Commit and push the updated files
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add . && git commit -m "Update version in helm chart." && git push
+          git add .
+          git commit -m "Update version in helm chart." || true
+          git push
 
       # This pushes a new commit
       - name: Update helm README.md
@@ -173,8 +175,8 @@ jobs:
     name: "Docker image"
     needs: [set-env]
     permissions: write-all
-    # If we publish manually the helm chart
-    if: ${{ inputs.publish_helm == 'true' }}
+    # If we publish manually the docker image
+    if: ${{ inputs.publish_docker == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/publish-docker

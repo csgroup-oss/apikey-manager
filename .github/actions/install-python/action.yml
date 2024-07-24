@@ -15,13 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ .Release.Name }}-auth
-data:
-  database_url: {{ .Values.config.database_url | b64enc }}
-  oidc_endpoint: {{ .Values.config.oidc_endpoint | b64enc }}
-  oidc_realm: {{ .Values.config.oidc_realm | b64enc }}
-  oidc_client_id: {{ .Values.config.oidc_client_id | b64enc }}
-  oidc_client_secret: {{ .Values.config.oidc_client_secret | b64enc }}
+name: python
+description: Install python with hardcoded version
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}

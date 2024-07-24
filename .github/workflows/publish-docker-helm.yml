@@ -156,7 +156,7 @@ jobs:
           # Also update the docker image to use from the values.yaml file
           if ${{ inputs.publish_docker == 'true' }}; then
             for file in $(find deploy -iname values.yaml); do
-              sed -i "s|^\(\s*tag:\).*|\1 $${{ needs.set-env.outputs.main_docker_tag }}|g" $file
+              sed -i "s|^\(\s*tag:\).*|\1 ${{ needs.set-env.outputs.main_docker_tag }}|g" $file
             done
           fi
 

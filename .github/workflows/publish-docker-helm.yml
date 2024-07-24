@@ -199,6 +199,7 @@ jobs:
           new="apikeymanager-${tag_version}"
 
           # Rename git tag
+          git fetch --tags # get the tag pushed by the last step
           git tag $new $old # create a new local tag named `new` from tag `old`.
           git tag -d $old # delete local tag `old`.
           git push origin $new :$old  # push new and remove old

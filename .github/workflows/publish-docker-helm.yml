@@ -82,8 +82,8 @@ jobs:
 
             # When pushing a git tag, also use the docker tag :latest
             other_docker_tag=latest
-            
-          else          
+
+          else
             # Deduce automatically the tag version from the last git tag or commit hash
             rm -f app/_version.py
             # This creates the _version.py file with the version deduced by setuptools_scm
@@ -91,7 +91,7 @@ jobs:
             # Read the version from this file
             tag_version=$(python -c "from app._version import __version__; print(__version__)")
             rm -f app/_version.py
-          fi          
+          fi
 
           # The last commit hash looks like: x.y.devxx+gxxx.xxx
           # We need 3 digits before .dev
@@ -104,17 +104,17 @@ jobs:
           # We need to replace + by .
           chart_version=$(sed "s|+|.|g" <<< $chart_version)
 
-          # In the publish-docker action, we replace invalid characters in the Docker version name, 
+          # In the publish-docker action, we replace invalid characters in the Docker version name,
           # e.g. 1.2.3a4+dev1a2b3c4d becomes 1.2.3a4.dev1a2b3c4d
           # and we pass it in lowercase.
           main_docker_tag=$(sed "s|+|.|g" <<< $tag_version)
           main_docker_tag=${main_docker_tag,,} # lowercase
 
           # Check that the git tag and release do not alreay exist
-          if [[ $(git tag -l $tag_version) ]]; then 
+          if [[ $(git tag -l $tag_version) ]]; then
             echo "Git tag already exists: $tag_version"
             exit 1
-          elif [[ $(gh release view $tag_version) ]]; then 
+          elif [[ $(gh release view $tag_version) ]]; then
             echo "Github realease already exists: $tag_version"
             exit 1
           fi
@@ -145,7 +145,7 @@ jobs:
 
           tag_version=${{ needs.set-env.outputs.tag_version }}
           chart_version=${{ needs.set-env.outputs.chart_version }}
-          
+
           # Update version number in Chart.yaml
           for file in $(find deploy -iname chart.yaml); do
             sed -i "s|^\(\s*appVersion:\).*|\1 $tag_version|g" $file
@@ -205,7 +205,7 @@ jobs:
           git push origin $new :$old  # push new and remove old
 
           # Rename github release
-          gh release edit $old --draft=false --title $new --tag $new 
+          gh release edit $old --draft=false --title $new --tag $new
 
           # We also need to change the release name (that contains the helm chart asset)
           # from the gh-pages branch, index.yaml file
@@ -229,7 +229,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The git release and tag were created by the helm chat job. 
+      # The git release and tag were created by the helm chat job.
       # If we didn't run this job and the user gave an official release version,
       # we must create them manually.
       - name: Create github release and git tag
@@ -258,7 +258,3 @@ jobs:
           version_name: ${{ needs.set-env.outputs.main_docker_tag }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           other_docker_tag: ${{ needs.set-env.outputs.other_docker_tag }}
-
-
-# TODO: 
-  # faire tourner image docker, vérifier _version.py et swagger

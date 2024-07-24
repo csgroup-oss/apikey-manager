@@ -34,15 +34,15 @@ on:
         type: choice
         required: true
         options:
-          - false
           - true
+          - false
       publish_docker:
         description: "Publish Docker image ?"
         type: choice
         required: true
         options:
-          - false
           - true
+          - false
 
 env:
   PYTHON_VERSION: 3.11
@@ -134,9 +134,6 @@ jobs:
             echo "Github realease already exists: $tag_version"
             exit 1
           fi
-
-          echo OK 
-          exit 0
           
           # Update version number in Chart.yaml
           for file in $(find deploy -iname chart.yaml); do
@@ -163,13 +160,14 @@ jobs:
           git-push: true
           chart-search-root: ./deploy
 
-      # # This creates a new github release and git tag
-      # - id: publish-chart
-      #   name: Publish helm chart
-      #   uses: ./.github/actions/publish-chart
-      #   with:
-      #     charts_dir: ./deploy/helm
-      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      # This creates a new github release and git tag
+      # and updates the index.yaml file from the gh-pages branch.
+      - id: publish-chart
+        name: Publish helm chart
+        uses: ./.github/actions/publish-chart
+        with:
+          charts_dir: ./deploy/helm
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   # docker-image:
   #   runs-on: ubuntu-latest

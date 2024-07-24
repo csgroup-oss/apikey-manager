@@ -212,7 +212,7 @@ jobs:
           current_branch=$(git rev-parse --abbrev-ref HEAD)
           git checkout gh-pages
           git pull origin gh-pages
-          sed "s,/download/$old/,/download/$new/,g" index.yaml
+          sed -i "s,/download/$old/,/download/$new/,g" index.yaml
 
           # Commit and push the updated files
           git add index.yaml && git commit -m "Change release name" && git push

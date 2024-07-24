@@ -1,23 +1,157 @@
 name: My test
 
-on: push
+# Run workflow only for manual trigger.
+# NOTE: this will automatically add a git tag after updating the source code for files:
+# deploy/helm/apikeymanager/Chart.yaml
+# deploy/helm/apikeymanager/README.md
+# deploy/helm/apikeymanager/values.yaml
+on:
+  push: # temp
+  workflow_dispatch: # manual trigger
+    inputs:
+      release_version:
+        description: "Official release version name. If empty: use the last git commit hash."
+        type: string
+        required: false
+      publish_helm:
+        description: "Publish Helm chart ?"
+        type: choice
+        required: true
+        options:
+          - false
+          - true
+      publish_docker:
+        description: "Publish Docker image ?"
+        type: choice
+        required: true
+        options:
+          - false
+          - true
+
+env:
+  PYTHON_VERSION: 3.11
+  DOCKER_REGISTRY: ghcr.io
 
 jobs:
-  my_test:
+  # Calculate variables for this workflow
+  set-env:
     runs-on: ubuntu-latest
+    name: "Set environment"
+    # If we publish manually the helm chart or docker image
+    if: ${{ inputs.publish_helm == 'true' || inputs.publish_docker == 'true' }}
+    outputs:
+      tag_version: ${{ steps.set-env.outputs.tag_version }}
+      other_docker_tag: ${{ steps.set-env.outputs.other_docker_tag }}
     steps:
       - uses: actions/checkout@v4
-      - run: |
+      - uses: ./.github/actions/install-python
+      - id: set-env
+        name: "Set environment"
+        run: |
+          set -euo pipefail
           set -x
-          date > generated.txt
-          # Note: the following account information will not work on GHES
 
-          # git config user.name "github-actions[bot]"
-          # git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Use the official version
+          if [[ -n ${{ inputs.release_version }} ]]; then
+            tag_version=${{ inputs.release_version }}
 
+            # When pushing a git tag, also use the docker tag :latest
+            other_docker_tag=latest
+          
+          else
+            # Deduce automatically the tag version from the last git tag or commit hash
+            rm -f app/_version.py
+            # This creates the _version.py file with the version deduced by setuptools_scm
+            pip install --root-user-action=ignore --no-cache-dir .
+            # Read the version from this file
+            tag_version=$(python -c "from app._version import __version__; print(__version__)")
+            rm -f app/_version.py
+          fi
+
+          # Save values
+          echo "tag_version=$tag_version" >> $GITHUB_OUTPUT
+          echo "other_docker_tag=$other_docker_tag" >> $GITHUB_OUTPUT
+
+        shell: bash
+
+  helm-chart:
+    runs-on: ubuntu-latest
+    name: "Helm chart"
+    needs: [set-env]
+    permissions: write-all
+    # If we publish manually the helm chart
+    if: ${{ inputs.publish_helm == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch all history for all branches and tags.
+
+      - id: adapt_versioin
+        name: Adapt the version tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -x
+
+          # Official version name or last commit hash
+          tag_version=${{ needs.set-env.outputs.tag_version }}
+          chart_version="$tag_version"
+
+          # The last commit hash looks like: x.y.devxx+gxxx.xxx
+          # We need 3 digits before .dev
+          chart_version=$(sed "s|^\([0-9]\.[0-9]\)\.dev|\1.0.dev|g" <<< $chart_version)
+
+          # We need -dev instead of .dev
+          chart_version=$(sed "s|^\([0-9\.]\+\)\.dev|\1-dev|g" <<< $chart_version)
+
+          # Because of a bug: https://github.com/helm/chart-releaser/pull/406
+          # We need to replace + by .
+          chart_version=$(sed "s|+|.|g" <<< $chart_version)
+          
+          # Update version number in Chart.yaml
+          for file in $(find deploy -iname chart.yaml); do
+            sed -i "s|^\(\s*appVersion:\).*|\1 $tag_version|g" $file
+            sed -i "s|^\(\s*version:\).*|\1 $chart_version|g" $file
+          done
+
+          # Also update the docker image to use from the values.yaml file
+          if ${{ inputs.publish_docker == 'true' }}; then
+            for file in $(find deploy -iname values.yaml); do
+              sed -i "s|^\(\s*tag:\).*|\1 $tag_version|g" $file
+            done
+          fi
+
+          # Commit and push the updated files
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add . && git commit -m "Bot action: update version in helm chart." && git push
 
-          git add .
-          git commit -m "generated"
-          git push
+      # This pushes a new commit
+      - name: Update helm README.md
+        uses: losisin/helm-docs-github-action@v1.1.4
+        with:
+          git-push: true
+          chart-search-root: ./deploy
+
+      # # This creates a new github release and git tag
+      # - id: publish-chart
+      #   name: Publish helm chart
+      #   uses: ./.github/actions/publish-chart
+      #   with:
+      #     charts_dir: ./deploy/helm
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  # my_test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: |
+  #         set -x
+  #         date > generated.txt
+  #         # Note: the following account information will not work on GHES
+  #         git config --global user.name "github-actions[bot]"
+  #         git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+  #         git add .
+  #         git commit -m "generated"
+  #         git push

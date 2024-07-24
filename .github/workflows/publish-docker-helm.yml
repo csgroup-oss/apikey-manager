@@ -76,11 +76,6 @@ jobs:
           if [[ ${{ github.event_name }} == push ]]; then
             other_docker_tag=latest
 
-          # Else try to get the version number from the user input of the manuel trigger
-          else
-            other_docker_tag=${{ github.event.inputs.other_docker_tag }}
-          fi
-
           # Save values
           echo "tag_version=$tag_version" >> $GITHUB_OUTPUT
           echo "other_docker_tag=$other_docker_tag" >> $GITHUB_OUTPUT

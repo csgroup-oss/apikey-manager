@@ -205,7 +205,7 @@ jobs:
           git push origin $new :$old  # push new and remove old
 
           # Rename github release
-          gh release edit $old --tag $new
+          gh release edit $old --draft=false --title $new --tag $new 
 
   docker-image:
     runs-on: ubuntu-latest

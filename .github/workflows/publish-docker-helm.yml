@@ -57,6 +57,7 @@ jobs:
     if: ${{ inputs.publish_helm == 'true' || inputs.publish_docker == 'true' }}
     outputs:
       tag_version: ${{ steps.set-env.outputs.tag_version }}
+      docker_tag: ${{ steps.set-env.outputs.docker_tag }}
       other_docker_tag: ${{ steps.set-env.outputs.other_docker_tag }}
     steps:
       - uses: actions/checkout@v4
@@ -88,8 +89,15 @@ jobs:
             rm -f app/_version.py
           fi
 
+          # In the publish-docker action, we replace invalid characters in the Docker version name, 
+          # e.g. 1.2.3a4+dev1a2b3c4d becomes 1.2.3a4.dev1a2b3c4d
+          # and we pass it in lowercase.
+          docker_tag=$(sed "s|+|.|g" <<< $docker_tag)
+          docker_tag=${docker_tag,,} # lowercase
+
           # Save values
           echo "tag_version=$tag_version" >> $GITHUB_OUTPUT
+          echo "docker_tag=${docker_tag:-}" >> $GITHUB_OUTPUT
           echo "other_docker_tag=${other_docker_tag:-}" >> $GITHUB_OUTPUT
 
         shell: bash
@@ -148,7 +156,7 @@ jobs:
           # Also update the docker image to use from the values.yaml file
           if ${{ inputs.publish_docker == 'true' }}; then
             for file in $(find deploy -iname values.yaml); do
-              sed -i "s|^\(\s*tag:\).*|\1 $tag_version|g" $file
+              sed -i "s|^\(\s*tag:\).*|\1 $${{ needs.set-env.outputs.docker_tag }}|g" $file
             done
           fi
 

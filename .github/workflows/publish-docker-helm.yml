@@ -91,6 +91,11 @@ jobs:
             # Read the version from this file
             tag_version=$(python -c "from app._version import __version__; print(__version__)")
             rm -f app/_version.py
+
+            # This gives me version e.g. 0.1.dev1+xxxxxxxx
+            # But after adding this git tag, I have errors with "pip install -e ."
+            # Replacing .dev1 by .dev0 seems to work.
+            tag_version=$(sed "s|\.dev[0-9]\+|dev0|g" <<< $tag_version)
           fi
 
           # The last commit hash looks like: x.y.devxx+gxxx.xxx

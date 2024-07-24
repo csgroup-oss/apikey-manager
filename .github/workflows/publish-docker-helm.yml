@@ -168,20 +168,26 @@ jobs:
           charts_dir: ./deploy/helm
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-  # docker-image:
-  #   runs-on: ubuntu-latest
-  #   name: "Docker image"
-  #   needs: [set-env]
-  #   permissions: write-all
-  #   # If we push a git tag, or if we publish manually the docker image
-  #   if: ${{ github.event_name == 'push' || inputs.publish_docker == 'true' }}
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/publish-docker
-  #       with:
-  #         dockerfile: ./Dockerfile
-  #         build_context_path: ./
-  #         build-args: SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.set-env.outputs.tag_version }}
-  #         version_name: ${{ needs.set-env.outputs.tag_version }}
-  #         github_token: ${{ secrets.GITHUB_TOKEN }}
-  #         other_docker_tag: ${{ needs.set-env.outputs.other_docker_tag }}
+  docker-image:
+    runs-on: ubuntu-latest
+    name: "Docker image"
+    needs: [set-env]
+    permissions: write-all
+    # If we publish manually the helm chart
+    if: ${{ inputs.publish_helm == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/publish-docker
+        with:
+          dockerfile: ./Dockerfile
+          build_context_path: ./
+          build-args: SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.set-env.outputs.tag_version }}
+          version_name: ${{ needs.set-env.outputs.tag_version }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          other_docker_tag: ${{ needs.set-env.outputs.other_docker_tag }}
+
+
+# TODO: 
+  # numéro de version ko dans helm/values.yml : v99.98 au lieu de 99.98
+  # renommer release et tag git puis index.yml dans gh-pages
+  # poser tag git et release au début de docker-image si pas de helm chart 

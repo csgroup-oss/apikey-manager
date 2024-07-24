@@ -17,30 +17,32 @@
 
 name: Publish Docker image and helm chart
 
-# Run workflow only for ...
+# Run workflow only for manual trigger.
+# NOTE: this will automatically add a git tag after updating the source code for files:
+# deploy/helm/apikeymanager/Chart.yaml
+# deploy/helm/apikeymanager/README.md
+# deploy/helm/apikeymanager/values.yaml
 on:
-  push:
-    tags:
-      - "**" # new git tags (including hierarchical tags like v1.0/beta)
   workflow_dispatch: # manual trigger
     inputs:
+      release_version:
+        description: "Official release version. If empty: use the last git commit hash."
+        type: string
+        required: false
       publish_helm:
         description: "Publish Helm chart ?"
         type: choice
         required: true
         options:
-          - false
           - true
+          - false
       publish_docker:
         description: "Publish Docker image ?"
         type: choice
         required: true
         options:
-          - false
           - true
-      other_docker_tag:
-        description: "2nd Docker image tag to use (1st tag = last git commit hash)"
-        required: false
+          - false
 
 env:
   PYTHON_VERSION: 3.11
@@ -51,107 +53,208 @@ jobs:
   set-env:
     runs-on: ubuntu-latest
     name: "Set environment"
-    # If we push a git tag, or if we publish manually the docker image or helm chart
-    if: ${{ github.event_name == 'push' || inputs.publish_helm == 'true' || inputs.publish_docker == 'true' }}
+    # If we publish manually the helm chart or docker image
+    if: ${{ inputs.publish_helm == 'true' || inputs.publish_docker == 'true' }}
     outputs:
       tag_version: ${{ steps.set-env.outputs.tag_version }}
+      chart_version: ${{ steps.set-env.outputs.chart_version }}
+      main_docker_tag: ${{ steps.set-env.outputs.main_docker_tag }}
       other_docker_tag: ${{ steps.set-env.outputs.other_docker_tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install-python
       - id: set-env
-        name: "Set environment"
+        name: Set environment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # to use gh = github cli
         run: |
+          set -euo pipefail
           set -x
 
-          # Deduce automatically the tag version from the last git tag or commit hash
-          rm -f app/_version.py
-          # This creates the _version.py file with the version deduced by setuptools_scm
-          pip install --root-user-action=ignore --no-cache-dir .
-          # Read the version from this file
-          tag_version=$(python -c "from app._version import __version__; print(__version__)")
-          rm -f app/_version.py
+          # Use the official version
+          tag_version=${{ inputs.release_version }}
+          if [[ -n $tag_version ]]; then
 
-          # When pushing a git tag, also use the docker tag :latest
-          if [[ ${{ github.event_name }} == push ]]; then
+            # We want the packaged name, see: https://packaging.pypa.io/en/latest/version.html
+            pip install packaging
+            tag_version=$(python -c "from packaging.version import Version; print(Version('$tag_version'))")
+
+            # When pushing a git tag, also use the docker tag :latest
             other_docker_tag=latest
 
-          # Else try to get the version number from the user input of the manuel trigger
           else
-            other_docker_tag=${{ github.event.inputs.other_docker_tag }}
+            # Deduce automatically the tag version from the last git tag or commit hash
+            rm -f app/_version.py
+            # This creates the _version.py file with the version deduced by setuptools_scm
+            pip install --root-user-action=ignore --no-cache-dir .
+            # Read the version from this file
+            tag_version=$(python -c "from app._version import __version__; print(__version__)")
+            rm -f app/_version.py
+          fi
+
+          # The last commit hash looks like: x.y.devxx+gxxx.xxx
+          # We need 3 digits before .dev
+          chart_version=$(sed "s|^\([0-9]\.[0-9]\)\.dev|\1.0.dev|g" <<< $tag_version)
+
+          # We need -dev instead of .dev
+          chart_version=$(sed "s|^\([0-9\.]\+\)\.dev|\1-dev|g" <<< $chart_version)
+
+          # Because of a bug: https://github.com/helm/chart-releaser/pull/406
+          # We need to replace + by .
+          chart_version=$(sed "s|+|.|g" <<< $chart_version)
+
+          # In the publish-docker action, we replace invalid characters in the Docker version name,
+          # e.g. 1.2.3a4+dev1a2b3c4d becomes 1.2.3a4.dev1a2b3c4d
+          # and we pass it in lowercase.
+          main_docker_tag=$(sed "s|+|.|g" <<< $tag_version)
+          main_docker_tag=${main_docker_tag,,} # lowercase
+
+          # Check that the git tag and release do not alreay exist
+          if [[ $(git tag -l $tag_version) ]]; then
+            echo "Git tag already exists: $tag_version"
+            exit 1
+          elif [[ $(gh release view $tag_version) ]]; then
+            echo "Github realease already exists: $tag_version"
+            exit 1
           fi
 
           # Save values
           echo "tag_version=$tag_version" >> $GITHUB_OUTPUT
-          echo "other_docker_tag=$other_docker_tag" >> $GITHUB_OUTPUT
-
-        shell: bash
-
-  docker-image:
-    runs-on: ubuntu-latest
-    name: "Docker image"
-    needs: [set-env]
-    permissions: write-all
-    # If we push a git tag, or if we publish manually the docker image
-    if: ${{ github.event_name == 'push' || inputs.publish_docker == 'true' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/publish-docker
-        with:
-          dockerfile: ./Dockerfile
-          build_context_path: ./
-          build-args: SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.set-env.outputs.tag_version }}
-          version_name: ${{ needs.set-env.outputs.tag_version }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          other_docker_tag: ${{ needs.set-env.outputs.other_docker_tag }}
+          echo "chart_version=$chart_version" >> $GITHUB_OUTPUT
+          echo "main_docker_tag=${main_docker_tag:-}" >> $GITHUB_OUTPUT
+          echo "other_docker_tag=${other_docker_tag:-}" >> $GITHUB_OUTPUT
 
   helm-chart:
     runs-on: ubuntu-latest
     name: "Helm chart"
     needs: [set-env]
     permissions: write-all
-    # If we push a git tag, or if we publish manually the helm chart
-    if: ${{ github.event_name == 'push' || inputs.publish_helm == 'true' }}
+    # If we publish manually the helm chart
+    if: ${{ inputs.publish_helm == 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # fetch all history for all branches and tags.
 
-      - id: adapt_versioin
-        name: Adapt the version tag
+      - name: Update helm chart.yaml and values.yaml
         shell: bash
         run: |
+          set -euo pipefail
           set -x
 
-          # Version name calculated by setuptools_scm
           tag_version=${{ needs.set-env.outputs.tag_version }}
-          chart_version="$tag_version"
+          chart_version=${{ needs.set-env.outputs.chart_version }}
 
-          # Without a git tag, the version will look like: x.y.devxx+gxxx.xxx
-          # We need 3 digits before .dev
-          chart_version=$(sed "s|^\([0-9]\.[0-9]\)\.dev|\1.0.dev|g" <<< $chart_version)
-
-          # We need -dev instead of .dev
-          chart_version=$(sed "s|^\([0-9\.]\+\)\.dev|\1-dev|g" <<< $chart_version)
-
-          # Replace + by .
-          chart_version=$(sed "s|+|.|g" <<< $chart_version)
-
-          echo "APP_VERSION=$tag_version" >> $GITHUB_OUTPUT
-          echo "CHART_VERSION=$chart_version" >> $GITHUB_OUTPUT
-
-      - name: Update version number in chart.yaml
-        shell: bash
-        run: |
-          set -x
-          for chart in $(find deploy -name Chart.yaml); do
-            sed -i "s,{{APP_VERSION}},${{ steps.adapt_versioin.outputs.APP_VERSION }}," $chart
-            sed -i "s,{{CHART_VERSION}},${{ steps.adapt_versioin.outputs.CHART_VERSION }}," $chart
+          # Update version number in Chart.yaml
+          for file in $(find deploy -iname chart.yaml); do
+            sed -i "s|^\(\s*appVersion:\).*|\1 $tag_version|g" $file
+            sed -i "s|^\(\s*version:\).*|\1 $chart_version|g" $file
           done
 
-      - id: publish-chart
-        name: Publish Helm chart
+          # Also update the docker image to use from the values.yaml file
+          if ${{ inputs.publish_docker == 'true' }}; then
+            for file in $(find deploy -iname values.yaml); do
+              sed -i "s|^\(\s*tag:\).*|\1 ${{ needs.set-env.outputs.main_docker_tag }}|g" $file
+            done
+          fi
+
+          # Commit and push the updated files
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update version in helm chart" || true
+          git push
+
+      # This pushes a new commit
+      - name: Update helm readme.md
+        uses: losisin/helm-docs-github-action@v1.1.4
+        with:
+          git-push: true
+          chart-search-root: ./deploy
+
+      # This creates a new github release and git tag
+      # and updates the index.yaml file from the gh-pages branch.
+      - name: Publish helm chart
         uses: ./.github/actions/publish-chart
         with:
           charts_dir: ./deploy/helm
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rename github release and git tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # to use gh = github cli
+        run: |
+          set -euo pipefail
+          set -x
+
+          tag_version=${{ needs.set-env.outputs.tag_version }}
+          chart_version=${{ needs.set-env.outputs.chart_version }}
+
+          # The github release and tag add a "<project-name>-" prefix that we want to remove.
+          # They also use a version number that conforms to the helm chart semver2 syntax.
+          # We need to use the setuptools_scm syntax instead.
+          old="apikeymanager-${chart_version}"
+          new="${tag_version}"
+
+          # Rename git tag
+          git fetch --tags # get the tag pushed by the last step
+          git tag $new $old # create a new local tag named `new` from tag `old`.
+          git tag -d $old # delete local tag `old`.
+          git push origin $new :$old  # push new and remove old
+
+          # Rename github release
+          gh release edit $old --draft=false --title $new --tag $new
+
+          # We also need to change the release name (that contains the helm chart asset)
+          # from the gh-pages branch, index.yaml file
+          current_branch=$(git rev-parse --abbrev-ref HEAD)
+          git checkout gh-pages
+          git pull origin gh-pages
+          sed -i "s,/download/$old/,/download/$new/,g" index.yaml
+
+          # Commit and push the updated files
+          git add index.yaml && git commit -m "Change release name" && git push
+
+          git checkout $current_branch # back to current branch
+
+  docker-image:
+    runs-on: ubuntu-latest
+    name: "Docker image"
+    needs: [set-env]
+    permissions: write-all
+    # If we publish manually the docker image
+    if: ${{ inputs.publish_docker == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The git release and tag were created by the helm chat job.
+      # If we didn't run this job and the user gave an official release version,
+      # we must create them manually.
+      - name: Create github release and git tag
+        if: ${{ inputs.publish_helm == 'false' && inputs.release_version != ''}}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # to use gh = github cli
+        run: |
+          set -euo pipefail
+          set -x
+
+          tag_version=${{ needs.set-env.outputs.tag_version }}
+
+          # Create git tag
+          git tag $tag_version
+          git push origin $tag_version
+
+          # Create github release
+          gh release create $tag_version --draft=false --title $tag_version --generate-notes
+
+      - uses: ./.github/actions/publish-docker
+        with:
+          dockerfile: ./Dockerfile
+          build_context_path: ./
+          build-args: SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.set-env.outputs.tag_version }}
+          version_name: ${{ needs.set-env.outputs.main_docker_tag }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          other_docker_tag: ${{ needs.set-env.outputs.other_docker_tag }}

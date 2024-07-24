@@ -31,7 +31,7 @@ Helm chart for APIKeyManager
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.repository | string | `"ghcr.io/csgroup-oss/apikey-manager"` | Image repository |
-| image.tag | string | `"latest"` | Image tag |
+| image.tag | float | `99.98` | Image tag |
 | imagePullSecrets[0] | object | `{"name":"ghcr-k8s"}` | Image pull secrets |
 | ingress.annotations | object | `{}` |  |
 | ingress.className | string | `""` |  |

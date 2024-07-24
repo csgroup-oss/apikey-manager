@@ -18,7 +18,9 @@
 name: Generate Helm documentation
 
 on:
-  - pull_request
+  # pull_request:
+  #   types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 env:
   PYTHON_VERSION: 3.11

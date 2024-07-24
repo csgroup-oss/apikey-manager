@@ -1,0 +1,23 @@
+name: My test
+
+on: push
+
+jobs:
+  my_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -x
+          date > generated.txt
+          # Note: the following account information will not work on GHES
+
+          # git config user.name "github-actions[bot]"
+          # git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git config --global user.name "$(git --no-pager log --format=format:'%an' -n 1)"
+          git config --global user.email "$(git --no-pager log --format=format:'%ae' -n 1)"
+          
+          git add .
+          git commit -m "generated"
+          git push

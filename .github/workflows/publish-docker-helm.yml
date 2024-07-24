@@ -68,8 +68,8 @@ jobs:
           set -x
 
           # Use the official version
-          if [[ -n ${{ inputs.release_version }} ]]; then
-            tag_version=${{ inputs.release_version }}
+          tag_version=${{ inputs.release_version }}
+          if [[ -n $tag_version ]]; then
 
             # We want the packaged name, see: https://packaging.pypa.io/en/latest/version.html
             pip install packaging
@@ -90,7 +90,7 @@ jobs:
 
           # Save values
           echo "tag_version=$tag_version" >> $GITHUB_OUTPUT
-          echo "other_docker_tag=$other_docker_tag" >> $GITHUB_OUTPUT
+          echo "other_docker_tag=${other_docker_tag:-}" >> $GITHUB_OUTPUT
 
         shell: bash
 
@@ -195,6 +195,6 @@ jobs:
 
 
 # TODO: 
-  # numéro de version ko dans helm/values.yml : v99.98 au lieu de 99.98
   # renommer release et tag git puis index.yml dans gh-pages
   # poser tag git et release au début de docker-image si pas de helm chart 
+  # faire tourner image docker, vérifier _version.py et swagger

@@ -55,7 +55,7 @@ image:
   # -- Image repository
   repository: ghcr.io/csgroup-oss/apikey-manager
   # -- Image tag
-  tag: 0.1.dev1+g6e78a24
+  tag: /home/runner/work/_temp/90ab76e8-8299-4380-bc45-8588079ac61a.sh.1.dev1.g94a50e9
 
 imagePullSecrets:
   # -- Image pull secrets

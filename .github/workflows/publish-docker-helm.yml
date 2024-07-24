@@ -57,13 +57,17 @@ jobs:
     if: ${{ inputs.publish_helm == 'true' || inputs.publish_docker == 'true' }}
     outputs:
       tag_version: ${{ steps.set-env.outputs.tag_version }}
+      chart_version: ${{ steps.set-env.outputs.chart_version }}
       main_docker_tag: ${{ steps.set-env.outputs.main_docker_tag }}
       other_docker_tag: ${{ steps.set-env.outputs.other_docker_tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install-python
       - id: set-env
-        name: "Set environment"
+        name: Set environment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # to use gh = github cli
         run: |
           set -euo pipefail
           set -x
@@ -87,7 +91,18 @@ jobs:
             # Read the version from this file
             tag_version=$(python -c "from app._version import __version__; print(__version__)")
             rm -f app/_version.py
-          fi
+          fi          
+
+          # The last commit hash looks like: x.y.devxx+gxxx.xxx
+          # We need 3 digits before .dev
+          chart_version=$(sed "s|^\([0-9]\.[0-9]\)\.dev|\1.0.dev|g" <<< $tag_version)
+
+          # We need -dev instead of .dev
+          chart_version=$(sed "s|^\([0-9\.]\+\)\.dev|\1-dev|g" <<< $chart_version)
+
+          # Because of a bug: https://github.com/helm/chart-releaser/pull/406
+          # We need to replace + by .
+          chart_version=$(sed "s|+|.|g" <<< $chart_version)
 
           # In the publish-docker action, we replace invalid characters in the Docker version name, 
           # e.g. 1.2.3a4+dev1a2b3c4d becomes 1.2.3a4.dev1a2b3c4d
@@ -95,12 +110,20 @@ jobs:
           main_docker_tag=$(sed "s|+|.|g" <<< $tag_version)
           main_docker_tag=${main_docker_tag,,} # lowercase
 
+          # Check that the git tag and release do not alreay exist
+          if [[ $(git tag -l $tag_version) ]]; then 
+            echo "Git tag already exists: $tag_version"
+            exit 1
+          elif [[ $(gh release view $tag_version) ]]; then 
+            echo "Github realease already exists: $tag_version"
+            exit 1
+          fi
+
           # Save values
           echo "tag_version=$tag_version" >> $GITHUB_OUTPUT
+          echo "chart_version=$chart_version" >> $GITHUB_OUTPUT
           echo "main_docker_tag=${main_docker_tag:-}" >> $GITHUB_OUTPUT
           echo "other_docker_tag=${other_docker_tag:-}" >> $GITHUB_OUTPUT
-
-        shell: bash
 
   helm-chart:
     runs-on: ubuntu-latest
@@ -114,38 +137,14 @@ jobs:
         with:
           fetch-depth: 0 # fetch all history for all branches and tags.
 
-      - id: adapt_versioin
-        name: Adapt the version tag
+      - name: Update helm chart.yaml and values.yaml
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # to use gh = github cli
         run: |
           set -euo pipefail
           set -x
 
-          # Official version or last commit hash
           tag_version=${{ needs.set-env.outputs.tag_version }}
-          chart_version="$tag_version"
-
-          # The last commit hash looks like: x.y.devxx+gxxx.xxx
-          # We need 3 digits before .dev
-          chart_version=$(sed "s|^\([0-9]\.[0-9]\)\.dev|\1.0.dev|g" <<< $chart_version)
-
-          # We need -dev instead of .dev
-          chart_version=$(sed "s|^\([0-9\.]\+\)\.dev|\1-dev|g" <<< $chart_version)
-
-          # Because of a bug: https://github.com/helm/chart-releaser/pull/406
-          # We need to replace + by .
-          chart_version=$(sed "s|+|.|g" <<< $chart_version)
-
-          # Check that the git tag and release do not alreay exist
-          if [[ $(git tag -l $tag_version) ]]; then 
-            echo "Git tag already exists: $tag_version"
-            exit 1
-          elif [[ $(gh release view $tag_version) ]]; then 
-            echo "Github realease already exists: $tag_version"
-            exit 1
-          fi
+          chart_version=${{ needs.set-env.outputs.chart_version }}
           
           # Update version number in Chart.yaml
           for file in $(find deploy -iname chart.yaml); do
@@ -168,7 +167,7 @@ jobs:
           git push
 
       # This pushes a new commit
-      - name: Update helm README.md
+      - name: Update helm readme.md
         uses: losisin/helm-docs-github-action@v1.1.4
         with:
           git-push: true
@@ -176,12 +175,33 @@ jobs:
 
       # This creates a new github release and git tag
       # and updates the index.yaml file from the gh-pages branch.
-      - id: publish-chart
-        name: Publish helm chart
+      - name: Publish helm chart
         uses: ./.github/actions/publish-chart
         with:
           charts_dir: ./deploy/helm
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rename github release and git tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # to use gh = github cli
+        run: |
+          set -euo pipefail
+          set -x
+
+          tag_version=${{ needs.set-env.outputs.tag_version }}
+          chart_version=${{ needs.set-env.outputs.chart_version }}
+
+          # The github release and tag add a "<project-name>-" prefix that we want to remove.
+          # They also use a version number that conforms to the helm chart semver2 syntax.
+          # We need to use the setuptools_scm syntax instead.
+          old="apikeymanager-${chart_version}"
+          new="apikeymanager-${tag_version}"
+
+          # Rename git tag
+          git tag $new $old # create a new local tag named `new` from tag `old`.
+          git tag -d $old # delete local tag `old`.
+          git push origin $new :$old  # push new and remove old
 
   docker-image:
     runs-on: ubuntu-latest

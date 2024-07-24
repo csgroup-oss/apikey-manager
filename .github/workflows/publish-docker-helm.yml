@@ -92,7 +92,7 @@ jobs:
           # In the publish-docker action, we replace invalid characters in the Docker version name, 
           # e.g. 1.2.3a4+dev1a2b3c4d becomes 1.2.3a4.dev1a2b3c4d
           # and we pass it in lowercase.
-          docker_tag=$(sed "s|+|.|g" <<< $docker_tag)
+          docker_tag=$(sed "s|+|.|g" <<< $tag_version)
           docker_tag=${docker_tag,,} # lowercase
 
           # Save values
@@ -197,7 +197,7 @@ jobs:
           dockerfile: ./Dockerfile
           build_context_path: ./
           build-args: SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.set-env.outputs.tag_version }}
-          version_name: ${{ needs.set-env.outputs.tag_version }}
+          version_name: ${{ needs.set-env.outputs.docker_tag }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           other_docker_tag: ${{ needs.set-env.outputs.other_docker_tag }}
 

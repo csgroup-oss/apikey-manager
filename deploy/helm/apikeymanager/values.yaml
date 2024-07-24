@@ -55,7 +55,7 @@ image:
   # -- Image repository
   repository: ghcr.io/csgroup-oss/apikey-manager
   # -- Image tag
-  tag: v99.97
+  tag: v99.98
 
 imagePullSecrets:
   # -- Image pull secrets

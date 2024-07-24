@@ -228,6 +228,28 @@ jobs:
     if: ${{ inputs.publish_docker == 'true' }}
     steps:
       - uses: actions/checkout@v4
+
+      # The git release and tag were created by the helm chat job. 
+      # If we didn't run this job and the user gave an official release version,
+      # we must create them manually.
+      - name: Create github release and git tag
+        if: ${{ inputs.publish_helm == 'false' && inputs.release_version != ''}}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # to use gh = github cli
+        run: |
+          set -euo pipefail
+          set -x
+
+          tag_version=${{ needs.set-env.outputs.tag_version }}
+
+          # Create git tag
+          git tag $tag_version
+          git push origin $tag_version
+
+          # Create github release
+          gh release create $tag_version --draft=false --title $tag_version --generate-notes
+
       - uses: ./.github/actions/publish-docker
         with:
           dockerfile: ./Dockerfile
@@ -239,6 +261,4 @@ jobs:
 
 
 # TODO: 
-  # renommer release et tag git puis index.yml dans gh-pages
-  # poser tag git et release au début de docker-image si pas de helm chart 
   # faire tourner image docker, vérifier _version.py et swagger

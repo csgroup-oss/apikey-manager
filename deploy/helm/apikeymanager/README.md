@@ -1,6 +1,6 @@
 # apikeymanager
 
-![Version: 99.97](https://img.shields.io/badge/Version-99.97-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 99.97](https://img.shields.io/badge/AppVersion-99.97-informational?style=flat-square)
+![Version: v99.97](https://img.shields.io/badge/Version-v99.97-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v99.97](https://img.shields.io/badge/AppVersion-v99.97-informational?style=flat-square)
 
 Helm chart for APIKeyManager
 
@@ -31,7 +31,7 @@ Helm chart for APIKeyManager
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.repository | string | `"ghcr.io/csgroup-oss/apikey-manager"` | Image repository |
-| image.tag | string | `"latest"` | Image tag |
+| image.tag | string | `"v99.97"` | Image tag |
 | imagePullSecrets[0] | object | `{"name":"ghcr-k8s"}` | Image pull secrets |
 | ingress.annotations | object | `{}` |  |
 | ingress.className | string | `""` |  |

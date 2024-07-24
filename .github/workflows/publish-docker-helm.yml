@@ -163,7 +163,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Update version in helm chart." || true
+          git commit -m "Update version in helm chart" || true
           git push
 
       # This pushes a new commit
@@ -206,6 +206,18 @@ jobs:
 
           # Rename github release
           gh release edit $old --draft=false --title $new --tag $new 
+
+          # We also need to change the release name (that contains the helm chart asset)
+          # from the gh-pages branch, index.yaml file
+          current_branch=$(git rev-parse --abbrev-ref HEAD)
+          git checkout gh-pages
+          git pull origin gh-pages
+          sed "s,/download/$old/,/download/$new/,g" index.yaml
+
+          # Commit and push the updated files
+          git add index.yaml && git commit -m "Change release name" && git push
+
+          git checkout $current_branch # back to current branch
 
   docker-image:
     runs-on: ubuntu-latest

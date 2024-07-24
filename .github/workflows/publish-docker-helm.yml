@@ -69,19 +69,24 @@ jobs:
 
           # Use the official version
           if [[ -n ${{ inputs.release_version }} ]]; then
-            export SETUPTOOLS_SCM_PRETEND_VERSION=${{ inputs.release_version }}
+            tag_version=${{ inputs.release_version }}
+
+            # We want the packaged name, see: https://packaging.pypa.io/en/latest/version.html
+            pip install packaging
+            tag_version=$(python -c "from packaging.version import Version; print(Version('$tag_version'))")
 
             # When pushing a git tag, also use the docker tag :latest
             other_docker_tag=latest
+            
+          else          
+            # Deduce automatically the tag version from the last git tag or commit hash
+            rm -f app/_version.py
+            # This creates the _version.py file with the version deduced by setuptools_scm
+            pip install --root-user-action=ignore --no-cache-dir .
+            # Read the version from this file
+            tag_version=$(python -c "from app._version import __version__; print(__version__)")
+            rm -f app/_version.py
           fi
-          
-          # Deduce automatically the tag version from the last git tag or commit hash
-          rm -f app/_version.py
-          # This creates the _version.py file with the version deduced by setuptools_scm
-          pip install --root-user-action=ignore --no-cache-dir .
-          # Read the version from this file
-          tag_version=$(python -c "from app._version import __version__; print(__version__)")
-          rm -f app/_version.py
 
           # Save values
           echo "tag_version=$tag_version" >> $GITHUB_OUTPUT

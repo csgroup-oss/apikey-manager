@@ -26,7 +26,7 @@ on:
   workflow_dispatch: # manual trigger
     inputs:
       release_version:
-        description: "Official release version name. If empty: use the last git commit hash."
+        description: "Official release version. If empty: use the last git commit hash."
         type: string
         required: false
       publish_helm:
@@ -105,11 +105,13 @@ jobs:
       - id: adapt_versioin
         name: Adapt the version tag
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # to use gh = github cli
         run: |
           set -euo pipefail
           set -x
 
-          # Official version name or last commit hash
+          # Official version or last commit hash
           tag_version=${{ needs.set-env.outputs.tag_version }}
           chart_version="$tag_version"
 
@@ -123,6 +125,18 @@ jobs:
           # Because of a bug: https://github.com/helm/chart-releaser/pull/406
           # We need to replace + by .
           chart_version=$(sed "s|+|.|g" <<< $chart_version)
+
+          # Check that the git tag and release do not alreay exist
+          if [[ $(git tag -l $tag_version) ]]; then 
+            echo "Git tag already exists: $tag_version"
+            exit 1
+          elif [[ $(gh release view $tag_version) ]]; then 
+            echo "Github realease already exists: $tag_version"
+            exit 1
+          fi
+
+          echo OK 
+          exit 0
           
           # Update version number in Chart.yaml
           for file in $(find deploy -iname chart.yaml); do
@@ -140,7 +154,7 @@ jobs:
           # Commit and push the updated files
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add . && git commit -m "Bot action: update version in helm chart." && git push
+          git add . && git commit -m "Update version in helm chart." && git push
 
       # This pushes a new commit
       - name: Update helm README.md

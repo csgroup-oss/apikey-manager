@@ -196,13 +196,16 @@ jobs:
           # They also use a version number that conforms to the helm chart semver2 syntax.
           # We need to use the setuptools_scm syntax instead.
           old="apikeymanager-${chart_version}"
-          new="apikeymanager-${tag_version}"
+          new="${tag_version}"
 
           # Rename git tag
           git fetch --tags # get the tag pushed by the last step
           git tag $new $old # create a new local tag named `new` from tag `old`.
           git tag -d $old # delete local tag `old`.
           git push origin $new :$old  # push new and remove old
+
+          # Rename github release
+          gh release edit $old --tag $new
 
   docker-image:
     runs-on: ubuntu-latest

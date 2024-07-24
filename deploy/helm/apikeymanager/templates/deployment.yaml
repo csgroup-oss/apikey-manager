@@ -89,6 +89,18 @@ spec:
               value: {{  .Values.config.keycloak_sync_freq | quote }}
             - name: "APIKM_SHOW_TECHNICAL_ENDPOINTS"
               value: {{  .Values.config.show_technical_endpoints | quote }}
+            - name: "APIKM_USE_AUTHLIB_OAUTH"
+              value: {{  .Values.config.use_authlib_oauth | quote }}
+            - name: "APIKM_SWAGGER_DESCRIPTION"
+              value: {{  .Values.config.swagger_description | quote }}
+            - name: "APIKM_CONTACT_NAME"
+              value: {{  .Values.config.contact_name | quote }}
+            - name: "APIKM_CONTACT_URL"
+              value: {{  .Values.config.contact_url | quote }}
+            - name: "APIKM_CONTACT_EMAIL"
+              value: {{  .Values.config.contact_email | quote }}
+            - name: "APIKM_OPENAPI_URL"
+              value: {{  .Values.config.openapi_url | quote }}
           {{- range $key, $val := .Values.env }}
             - name: {{ $key }}
               value: {{ $val | quote }}

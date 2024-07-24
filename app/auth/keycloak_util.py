@@ -30,7 +30,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass
 class KCInfo:
     is_enabled: bool
-    roles: list[str] | None
+    roles: list[str]
 
 
 class KCUtil:
@@ -63,7 +63,9 @@ class KCUtil:
         try:
             kadm = self.keycloak_admin
             user = kadm.get_user(user_id)
-            iam_roles = [role["name"] for role in kadm.get_realm_roles_of_user(user_id)]
+            iam_roles = [
+                role["name"] for role in kadm.get_composite_realm_roles_of_user(user_id)
+            ]
             return KCInfo(user["enabled"], iam_roles)
         except KeycloakGetError as error:
             # If the user is not found, this means he was removed from keycloak.
@@ -71,7 +73,7 @@ class KCUtil:
             if (error.response_code == 404) and (
                 "User not found" in error.response_body.decode("utf-8")
             ):
-                LOGGER.warning(f"User '{user_id}' not found in keycloak. ")
-                return KCInfo(False, None)
+                LOGGER.warning(f"User '{user_id}' not found in keycloak.")
+                return KCInfo(False, [])
 
             raise

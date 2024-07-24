@@ -68,6 +68,7 @@ class APIKeyCrud:
             Column("name", String),
             # User ID in keycloak
             Column("user_id", String, index=True, nullable=False),
+            Column("user_login", String),
             # Is the user active in keycloak ? True by defulat, because
             # to create an apikey, the user must be authenticated to keycloak.
             Column("user_active", Boolean, default=True),
@@ -78,7 +79,7 @@ class APIKeyCrud:
             Column("latest_query_date", DateTime),
             Column("total_queries", Integer, default=0),
             Column("latest_sync_date", DateTime),
-            Column("iam_roles", JSON, default={}),
+            Column("iam_roles", JSON, default=[]),
             Column("config", JSON, default={}),
             Column("allowed_referers", JSON, default=None),
         )
@@ -94,6 +95,7 @@ class APIKeyCrud:
         self,
         name: str,
         user_id: str,
+        user_login: str,
         never_expire: bool,
         iam_roles: list[str],
         config: dict,
@@ -106,6 +108,7 @@ class APIKeyCrud:
                     api_key=self.__hash(api_key),
                     name=name,
                     user_id=user_id,
+                    user_login=user_login,
                     never_expire=never_expire,
                     expiration_date=datetime.now(UTC)
                     + timedelta(hours=settings.default_apikey_ttl_hour),
@@ -216,6 +219,7 @@ class APIKeyCrud:
                 select(
                     t.c[
                         "user_id",
+                        "user_login",
                         "user_active",
                         "is_active",
                         "iam_roles",

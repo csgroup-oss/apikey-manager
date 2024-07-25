@@ -2,6 +2,19 @@ apiVersion: v1
 entries:
   apikeymanager:
   - apiVersion: v2
+    appVersion: "99.98"
+    created: "2024-07-25T07:47:28.283158463Z"
+    description: Helm chart for APIKeyManager
+    digest: a45ebfd2eaacd00787b24397b1d36c61820b9805df2091875fe555e56df166bc
+    maintainers:
+    - name: CS GROUP
+      url: https://github.com/csgroup-oss/apikey-manager
+    name: apikeymanager
+    type: application
+    urls:
+    - https://github.com/csgroup-oss/apikey-manager/releases/download/apikeymanager-99.98/apikeymanager-99.98.tgz
+    version: "99.98"
+  - apiVersion: v2
     appVersion: 0.1.dev0+g8d2e042
     created: "2024-07-24T16:12:58.689104009Z"
     description: Helm chart for APIKeyManager
@@ -14,4 +27,4 @@ entries:
     urls:
     - https://github.com/csgroup-oss/apikey-manager/releases/download/0.1.dev0+g8d2e042/apikeymanager-0.1.0-dev0.g8d2e042.tgz
     version: 0.1.0-dev0.g8d2e042
-generated: "2024-07-24T16:12:58.689113777Z"
+generated: "2024-07-25T07:47:28.283172399Z"

@@ -290,7 +290,7 @@ def test_revoke_renew(mocker, fastapi_app, client):
     assert check_endpoint(client, apikey_value).status_code == HTTP_403_FORBIDDEN
 
     # In the meantime, if the user information changes in keycloak, the apikey should be updatd
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES2)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES2)
 
     # Renew it
     response = client.get("/auth/api_key/renew", params={"api-key": apikey_value})
@@ -332,7 +332,7 @@ def test_expired_renew(mocker, fastapi_app, client):
     assert check_endpoint(client, apikey_value).status_code == HTTP_403_FORBIDDEN
 
     # In the meantime, if the user information changes in keycloak, the apikey should be updatd
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, IAM_ROLES2)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES2)
 
     # Renew it with a date in the future
     response = client.get(

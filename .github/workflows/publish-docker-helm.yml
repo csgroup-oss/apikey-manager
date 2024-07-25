@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Publish Docker image and helm chart
+name: Tag version + helm chart and docker iamge
 
 # Run workflow only for manual trigger.
 # NOTE: this will automatically add a git tag after updating the source code for files:

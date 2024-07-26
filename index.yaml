@@ -38,7 +38,7 @@ entries:
     name: apikeymanager
     type: application
     urls:
-    - https://github.com/csgroup-oss/apikey-manager/releases/download/apikeymanager-0.1.0-dev0.gfb84e0c/apikeymanager-0.1.0-dev0.gfb84e0c.tgz
+    - https://github.com/csgroup-oss/apikey-manager/releases/download/0.1.dev0+gfb84e0c/apikeymanager-0.1.0-dev0.gfb84e0c.tgz
     version: 0.1.0-dev0.gfb84e0c
   - apiVersion: v2
     appVersion: 0.1.dev0+g8d2e042

@@ -1,6 +1,6 @@
 # apikeymanager
 
-![Version: 0.1.0-dev0.g443d83f](https://img.shields.io/badge/Version-0.1.0--dev0.g443d83f-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.dev0+g443d83f](https://img.shields.io/badge/AppVersion-0.1.dev0+g443d83f-informational?style=flat-square)
+![Version: 0.1.0-dev0.gfb84e0c](https://img.shields.io/badge/Version-0.1.0--dev0.gfb84e0c-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.dev0+gfb84e0c](https://img.shields.io/badge/AppVersion-0.1.dev0+gfb84e0c-informational?style=flat-square)
 
 Helm chart for APIKeyManager
 

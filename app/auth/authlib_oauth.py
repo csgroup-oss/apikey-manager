@@ -19,6 +19,7 @@ from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.starlette_client.apps import StarletteOAuth2App
 from fastapi import APIRouter, FastAPI, HTTPException, status
 from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.config import Config
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
@@ -58,6 +59,46 @@ def init(app: FastAPI) -> APIRouter:
         },
     )
 
+    @router.get("/mytest")
+    async def mytest(request: Request):
+        # Code and state coming from keycloak
+        code = request.query_params.get("code")
+        state = request.query_params.get("state")
+
+        if (not code) and (not state):
+            redirect_uri = request.url_for("mytest")
+
+            # From: keycloak.authorize_redirect
+            from starlette.datastructures import URL
+            from starlette.status import HTTP_303_SEE_OTHER
+
+            # return await keycloak.authorize_redirect(request, redirect_uri)
+            kwargs = {}
+
+            # Handle Starlette >= 0.26.0 where redirect_uri may now be a URL and not a string
+            if redirect_uri and isinstance(redirect_uri, URL):
+                redirect_uri = str(redirect_uri)
+            rv = await keycloak.create_authorization_url(redirect_uri, **kwargs)
+            await keycloak.save_authorize_data(request, redirect_uri=redirect_uri, **rv)
+            return JSONResponse(status_code=HTTP_303_SEE_OTHER, content=rv["url"])
+            # return RedirectResponse(rv['url'], status_code=302)
+
+        # TODO: à faire dans un second endpoint qui est appelé par rs-server/services/common/rs_server_common/authentication.py
+        # qui récupère le userinfo, calcule user_login et iam_roles (et les sauve dans session = les cookies)
+
+        # Else we are called from keycloak.
+        # We save the user information received from keycloak.
+        #
+        # NOTE: in case of MismatchingStateError, normally this should not happen
+        # anymore. It may be a bug in Chrome linked to:
+        # https://github.com/encode/starlette/issues/2019
+        token = await keycloak.authorize_access_token(request)
+        userinfo = dict(token["userinfo"])
+        request.session["user"] = userinfo
+
+        # Redirect to this same endpoint to remove the URL query parameters
+        return RedirectResponse("docs")
+
     @router.get("/docs", include_in_schema=False)
     async def docs(request: Request):
         """
@@ -79,14 +120,11 @@ def init(app: FastAPI) -> APIRouter:
         # which then will call again this endpiont.
         if (not code) and (not state):
             redirect_uri = request.url_for("docs")
-            return await keycloak.authorize_redirect(request, redirect_uri)
+            response = await keycloak.authorize_redirect(request, redirect_uri)
+            return response
 
         # Else we are called from keycloak.
         # We save the user information received from keycloak.
-        #
-        # NOTE: in case of MismatchingStateError, normally this should not happen
-        # anymore. It may be a bug in Chrome linked to:
-        # https://github.com/encode/starlette/issues/2019
         token = await keycloak.authorize_access_token(request)
         userinfo = dict(token["userinfo"])
         request.session["user"] = userinfo
@@ -97,7 +135,18 @@ def init(app: FastAPI) -> APIRouter:
     @router.get("/logout")
     async def logout(request: Request):
         request.session.pop("user", None)
-        return {"msg": "Logged out"}
+
+        for key in list(request.session.keys()):
+            if key.startswith("_state_"):
+                request.session.pop(key, None)
+
+        metadata = await keycloak.load_server_metadata()
+        end_session_endpoint = metadata["end_session_endpoint"]
+
+        return HTMLResponse(
+            "You are logged out.<br><br>"
+            f"<a href='{end_session_endpoint}'>Click here to also log out from the authentication server.</a>"
+        )
 
     return router
 

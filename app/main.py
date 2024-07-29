@@ -130,8 +130,8 @@ def get_application() -> FastAPI:
 
         application.include_router(
             authlib_oauth_router,
-            tags=["authlib OAuth"],
-            include_in_schema=api_settings.show_technical_endpoints,
+            tags=["Authentication"],
+            include_in_schema=True,
         )
 
     if api_settings.debug:

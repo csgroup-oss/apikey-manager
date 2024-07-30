@@ -103,6 +103,6 @@ entries:
     name: apikeymanager
     type: application
     urls:
-    - https://github.com/csgroup-oss/apikey-manager/releases/download/apikeymanager-0.1.0-dev0.g173becc/apikeymanager-0.1.0-dev0.g173becc.tgz
+    - https://github.com/csgroup-oss/apikey-manager/releases/download/0.1.dev0+g173becc/apikeymanager-0.1.0-dev0.g173becc.tgz
     version: 0.1.0-dev0.g173becc
 generated: "2024-07-30T13:55:07.219830928Z"

@@ -39,6 +39,8 @@ config:
   oidc_client_id: ""
   # -- OIDC Secret used to sync user info from Keycloak
   oidc_client_secret: ""
+  # -- Random string used to encode cookie-based HTTP sessions in SessionMiddleware
+  cookie_secret: ""
   # -- Rate limiter configuration for the check apikey endpoint
   rate_limit: "20/minute"
   # -- Sync frequency of a user with data stored in Keycloak (in seconds)

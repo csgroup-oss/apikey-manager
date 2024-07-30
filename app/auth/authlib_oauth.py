@@ -44,7 +44,7 @@ def init(app: FastAPI) -> APIRouter:
 
     config = Config(environ=config_data)
 
-    app.add_middleware(SessionMiddleware, secret_key="!secret")
+    app.add_middleware(SessionMiddleware, secret_key=api_settings.cookie_secret)
 
     oauth = OAuth(config)
 

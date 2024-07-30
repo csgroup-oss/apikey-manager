@@ -83,6 +83,11 @@ spec:
                 secretKeyRef:
                   key:  oidc_client_secret
                   name: {{ .Release.Name }}-auth
+            - name: "APIKM_COOKIE_SECRET"
+              valueFrom:
+                secretKeyRef:
+                  key:  cookie_secret
+                  name: {{ .Release.Name }}-auth
             - name: "APIKM_RATE_LIMIT"
               value: {{  .Values.config.rate_limit | quote }}
             - name: "APIKM_KEYCLOAK_SYNC_FREQ"

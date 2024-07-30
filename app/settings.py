@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
+import string
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -50,6 +52,11 @@ class ApiSettings(BaseSettings):
     oidc_realm: str = ""
     oidc_client_id: str = ""
     oidc_client_secret: str = ""
+
+    # Random string used to encode cookie-based HTTP sessions in SessionMiddleware
+    cookie_secret: str = "".join(
+        random.SystemRandom().choice(string.digits) for _ in range(30)
+    )
 
     # Rate limiter configuration for the check apikey endpoint: after too many requests,
     # the user will receive an error: 429 Too Many Requests

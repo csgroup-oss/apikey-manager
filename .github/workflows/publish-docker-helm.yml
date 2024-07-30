@@ -154,12 +154,11 @@ jobs:
           set -euo pipefail
           set -x
 
-          tag_version=${{ needs.set-env.outputs.tag_version }}
           chart_version=${{ needs.set-env.outputs.chart_version }}
 
           # Update version number in Chart.yaml
           for file in $(find deploy -iname chart.yaml); do
-            sed -i "s|^\(\s*appVersion:\).*|\1 $tag_version|g" $file
+            sed -i "s|^\(\s*appVersion:\).*|\1 $chart_version|g" $file
             sed -i "s|^\(\s*version:\).*|\1 $chart_version|g" $file
           done
 

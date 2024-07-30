@@ -1,6 +1,6 @@
 # apikeymanager
 
-![Version: 0.1.0-dev0.gf78ca54](https://img.shields.io/badge/Version-0.1.0--dev0.gf78ca54-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.0-dev0.gf78ca54](https://img.shields.io/badge/AppVersion-0.1.0--dev0.gf78ca54-informational?style=flat-square)
+![Version: 0.1.0-dev0.g1b9a245](https://img.shields.io/badge/Version-0.1.0--dev0.g1b9a245-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.0-dev0.g1b9a245](https://img.shields.io/badge/AppVersion-0.1.0--dev0.g1b9a245-informational?style=flat-square)
 
 Helm chart for APIKeyManager
 
@@ -18,6 +18,7 @@ Helm chart for APIKeyManager
 | config.contact_email | string | `"support@csgroup.space"` | Contact email displayed in the swagger front page |
 | config.contact_name | string | `"CS Group France"` | Contact name displayed in the swagger front page |
 | config.contact_url | string | `"https://github.com/csgroup-oss/apikey-manager/"` | Contact url displayed in the swagger front page |
+| config.cookie_secret | string | `""` | Random string used to encode cookie-based HTTP sessions in SessionMiddleware |
 | config.cors_allow_methods | string | `"GET"` | Allow CORS for methods |
 | config.cors_origins_regex | string | `".*"` | Allow CORS from (regexp) |
 | config.database_url | string | `"sqlite:///./test.db"` | Database to store API Keys |
@@ -37,7 +38,7 @@ Helm chart for APIKeyManager
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.repository | string | `"ghcr.io/csgroup-oss/apikey-manager"` | Image repository |
-| image.tag | string | `"0.1.dev0.gf78ca54"` | Image tag |
+| image.tag | string | `"0.1.dev0.g1b9a245"` | Image tag |
 | imagePullSecrets[0] | object | `{"name":"ghcr-k8s"}` | Image pull secrets |
 | ingress.annotations | object | `{}` |  |
 | ingress.className | string | `""` |  |

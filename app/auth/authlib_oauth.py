@@ -69,25 +69,21 @@ async def login(request: Request):
     # If they are not set, then we need to call keycloak,
     # which then will call again this endpiont.
     if (not code) and (not state):
+        response = await keycloak.authorize_redirect(request, calling_endpoint)
 
         # If called from a console, return the login page url so the caller can display it itself.
         if called_from_console:
-            response = await keycloak.authorize_redirect(request, calling_endpoint)
             return response.headers["location"]
 
         # From a browser, make the redirection in the current browser tab
-        return await keycloak.authorize_redirect(request, calling_endpoint) # request.url_for("login_from_browser"))
+        return response
 
     # Else we are called from keycloak.
     # We save and encrypt in cookies the user information received from keycloak.
     token = await keycloak.authorize_access_token(request)
     userinfo = dict(token["userinfo"])
-    request.session["user_id"] = fernet.encrypt(userinfo["sub"].encode()).decode(
-        "utf-8"
-    )
-    request.session["user_login"] = fernet.encrypt(
-        userinfo["preferred_username"].encode()
-    ).decode("utf-8")
+    request.session["user_id"] = userinfo["sub"]
+    request.session["user_login"] = userinfo["preferred_username"]
 
     # Redirect to the calling endpoint after removing the authentication query parameters from the URL.
     # See: https://stackoverflow.com/a/7734686
@@ -206,24 +202,9 @@ async def authlib_oauth(request: Request) -> AuthInfo:
                 f"You must first login by calling this URL in your browser: {request.url_for('login_from_browser')}")
         
         # Let's hope that the caller called from a browser (can we detect this ?) or the redirections won't work.
-        # Login and redirect.
-        #RedirectResponse("/login_from_browser")
+        # Raising this exception will call the login method and redirect.        
         raise RequiresLoginException
 
-        # TODO: test POST  
-
-        # raise HTTPException(
-        #     status_code=status.HTTP_401_UNAUTHORIZED,
-        #     detail={
-        #         "msg": "You are not logged in. "
-        #         f"Refresh this page with F5 to log in or go to: {request.base_url}docs"
-        #     },
-        # )
-
-
-
-    user_id = fernet.decrypt(user_id).decode()
-    user_login = fernet.decrypt(user_login).decode()
     user_info = kcutil.get_user_info(user_id)
 
     if user_info.is_enabled:

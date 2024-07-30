@@ -90,6 +90,6 @@ entries:
     name: apikeymanager
     type: application
     urls:
-    - https://github.com/csgroup-oss/apikey-manager/releases/download/apikeymanager-0.1.0-dev0.g1b9a245/apikeymanager-0.1.0-dev0.g1b9a245.tgz
+    - https://github.com/csgroup-oss/apikey-manager/releases/download/0.1.dev0+g1b9a245/apikeymanager-0.1.0-dev0.g1b9a245.tgz
     version: 0.1.0-dev0.g1b9a245
 generated: "2024-07-30T13:47:21.99714604Z"

@@ -18,8 +18,9 @@
 import re
 from collections.abc import Callable
 
+from fastapi.responses import RedirectResponse
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.logger import logger
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -53,7 +54,7 @@ def get_application() -> FastAPI:
         # If we use the authlib OAuth authentication, we override the /docs endpoint.
         # Here we must pass None so the URLs /docs and /docs/ (with a trailing slash)
         # are both redirected to our endpoint.
-        docs_url=None if api_settings.use_authlib_oauth else "/docs/",
+        # docs_url=None if api_settings.use_authlib_oauth else "/docs/",
         root_path=api_settings.root_path,
         openapi_tags=tags_metadata,
         redoc_url=None,
@@ -134,6 +135,10 @@ def get_application() -> FastAPI:
             include_in_schema=True,
         )
 
+        @application.exception_handler(authlib_oauth.RequiresLoginException)
+        async def exception_handler(request: Request, exc: authlib_oauth.RequiresLoginException) -> Response:
+            return await authlib_oauth.login(request)
+
     if api_settings.debug:
         application.include_router(
             example_router,
@@ -141,6 +146,7 @@ def get_application() -> FastAPI:
             tags=["Example of protected service"],
             include_in_schema=api_settings.show_technical_endpoints,
         )
+
     return application
 
 

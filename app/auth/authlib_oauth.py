@@ -17,15 +17,14 @@
 
 from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.starlette_client.apps import StarletteOAuth2App
-from cryptography.fernet import Fernet
-from fastapi import APIRouter, FastAPI, HTTPException, Response, status
-from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, FastAPI, HTTPException, status
+from fastapi.responses import HTMLResponse
 from starlette.config import Config
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
+from fastapi import FastAPI, Request, Response
 
 
 from ..settings import AuthInfo, api_settings
@@ -33,13 +32,13 @@ from .keycloak_util import KCUtil
 
 keycloak: StarletteOAuth2App = None
 
-# Fernet guarantees that a message encrypted using it cannot be
-# manipulated or read without the key.
-fernet = Fernet(Fernet.generate_key())
+# See https://github.com/fastapi/fastapi/discussions/7817#discussioncomment-5144391
+class RequiresLoginException(Exception):
+    pass    
 
 
 async def is_logged_in(request: Request) -> bool:
-    return bool(request.session.get("user_id") and request.session.get("user_login"))
+    return "user" in request.session
 
 async def login(request: Request):
     """
@@ -79,11 +78,10 @@ async def login(request: Request):
         return response
 
     # Else we are called from keycloak.
-    # We save and encrypt in cookies the user information received from keycloak.
+    # We save in cookies the user information received from keycloak.
     token = await keycloak.authorize_access_token(request)
     userinfo = dict(token["userinfo"])
-    request.session["user_id"] = userinfo["sub"]
-    request.session["user_login"] = userinfo["preferred_username"]
+    request.session["user"] = userinfo
 
     # Redirect to the calling endpoint after removing the authentication query parameters from the URL.
     # See: https://stackoverflow.com/a/7734686
@@ -108,7 +106,7 @@ def init(app: FastAPI) -> APIRouter:
 
     config = Config(environ=config_data)
 
-    app.add_middleware(SessionMiddleware, secret_key="!secret")
+    app.add_middleware(SessionMiddleware, secret_key=api_settings.cookie_secret)
 
     oauth = OAuth(config)
 
@@ -119,6 +117,7 @@ def init(app: FastAPI) -> APIRouter:
         client_secret=config("KEYCLOAK_CLIENT_SECRET"),
         server_metadata_url=api_settings.oidc_metadata_url,
         client_kwargs={
+            "code_challenge_method": "S256", # Add PKCE for Authorization Code
             "scope": "openid profile email",
         },
     )
@@ -135,10 +134,13 @@ def init(app: FastAPI) -> APIRouter:
     async def login_from_console(request: Request):
         return await login(request)
 
+    @app.exception_handler(RequiresLoginException)
+    async def exception_handler(request: Request, exc: RequiresLoginException) -> Response:
+        return await login(request)
+
     @router.get("/logout")
     async def logout(request: Request):
-        request.session.pop("user_id", None)
-        request.session.pop("user_login", None)
+        request.session.pop("user", None)
 
         for key in list(request.session.keys()):
             if key.startswith("_state_"):
@@ -179,19 +181,13 @@ def init(app: FastAPI) -> APIRouter:
 
 kcutil = KCUtil()
 
-
-
-
-# See https://github.com/fastapi/fastapi/discussions/7817#discussioncomment-5144391
-class RequiresLoginException(Exception):
-    pass        
+    
 
 
 async def authlib_oauth(request: Request) -> AuthInfo:
     # Read user information from cookies to see if he's logged in
-    user_id = request.session.get("user_id")
-    user_login = request.session.get("user_login")
-    if not (user_id and user_login):
+    user = request.session.get("user")
+    if not user:
 
         # We can login then redirect to this endpoint, but this is not possible to make redirection from the Swagger.
         # In this case, referer = http://<domain>:<port>/docs
@@ -205,6 +201,8 @@ async def authlib_oauth(request: Request) -> AuthInfo:
         # Raising this exception will call the login method and redirect.        
         raise RequiresLoginException
 
+    user_id = user.get("sub")
+    user_login = user.get("preferred_username")
     user_info = kcutil.get_user_info(user_id)
 
     if user_info.is_enabled:

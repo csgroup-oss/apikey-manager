@@ -18,9 +18,8 @@
 import re
 from collections.abc import Callable
 
-from fastapi.responses import RedirectResponse
 import uvicorn
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.logger import logger
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -134,10 +133,6 @@ def get_application() -> FastAPI:
             tags=["Authentication"],
             include_in_schema=True,
         )
-
-        @application.exception_handler(authlib_oauth.RequiresLoginException)
-        async def exception_handler(request: Request, exc: authlib_oauth.RequiresLoginException) -> Response:
-            return await authlib_oauth.login(request)
 
     if api_settings.debug:
         application.include_router(

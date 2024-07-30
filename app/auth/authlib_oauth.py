@@ -17,7 +17,6 @@
 
 from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.starlette_client.apps import StarletteOAuth2App
-from cryptography.fernet import Fernet
 from fastapi import APIRouter, FastAPI, HTTPException, status
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
@@ -30,10 +29,6 @@ from ..settings import AuthInfo, api_settings
 from .keycloak_util import KCUtil
 
 keycloak: StarletteOAuth2App = None
-
-# Fernet guarantees that a message encrypted using it cannot be
-# manipulated or read without the key.
-fernet = Fernet(Fernet.generate_key())
 
 
 def init(app: FastAPI) -> APIRouter:
@@ -74,7 +69,7 @@ def init(app: FastAPI) -> APIRouter:
         ui_title = app.title + " - Swagger UI"
 
         # If the user is already logged in, do nothing, just display the Swagger UI.
-        if request.session.get("user_id") and request.session.get("user_login"):
+        if request.session.get("user"):
             return get_swagger_ui_html(openapi_url=app.openapi_url, title=ui_title)
 
         # Code and state coming from keycloak
@@ -88,23 +83,17 @@ def init(app: FastAPI) -> APIRouter:
             return await keycloak.authorize_redirect(request, redirect_uri)
 
         # Else we are called from keycloak.
-        # We save and encrypt in cookies the user information received from keycloak.
+        # We save the user information received from keycloak.
         token = await keycloak.authorize_access_token(request)
         userinfo = dict(token["userinfo"])
-        request.session["user_id"] = fernet.encrypt(userinfo["sub"].encode()).decode(
-            "utf-8"
-        )
-        request.session["user_login"] = fernet.encrypt(
-            userinfo["preferred_username"].encode()
-        ).decode("utf-8")
+        request.session["user"] = userinfo
 
         # Redirect to this same endpoint to remove the URL query parameters
         return RedirectResponse("docs")
 
     @router.get("/logout")
     async def logout(request: Request):
-        request.session.pop("user_id", None)
-        request.session.pop("user_login", None)
+        request.session.pop("user", None)
 
         for key in list(request.session.keys()):
             if key.startswith("_state_"):
@@ -128,9 +117,8 @@ kcutil = KCUtil()
 
 async def authlib_oauth(request: Request) -> AuthInfo:
     # Read user information from cookies
-    user_id = request.session.get("user_id")
-    user_login = request.session.get("user_login")
-    if not (user_id and user_login):
+    user = request.session.get("user")
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -139,8 +127,8 @@ async def authlib_oauth(request: Request) -> AuthInfo:
             },
         )
 
-    user_id = fernet.decrypt(user_id).decode()
-    user_login = fernet.decrypt(user_login).decode()
+    user_id = user.get("sub")
+    user_login = user.get("preferred_username")
     user_info = kcutil.get_user_info(user_id)
 
     if user_info.is_enabled:

@@ -1,0 +1,36 @@
+# Copyright 2023-2024, CS GROUP - France, https://www.csgroup.eu/
+#
+# This file is part of APIKeyManager project
+#     https://github.com/csgroup-oss/apikey-manager/
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Safety Security and License Configuration file
+# See: https://docs.safetycli.com/safety-2/safety-cli-2-scanner/policy-file#structure-of-the-policy-file
+security: # configuration for the `safety check` command
+    # ignore-cvss-severity-below: 0 # A severity number between 0 and 10. Some helpful reference points: 9=ignore all vulnerabilities except CRITICAL severity. 7=ignore all vulnerabilities except CRITICAL
+    # ignore-cvss-unknown-severity: False # True or False. We recommend you set this to False.
+    # ignore-vulnerabilities: # Here you can list multiple specific vulnerabilities you want to ignore (optionally for a time period)
+    #     # We recommend making use of the optional `reason` and `expires` keys for each vulnerability that you ignore.
+    #     25853: # Example vulnerability ID
+    #         reason: we do not use the vulnerable function # optional, for internal note purposes to communicate with your team. This reason will be reported in the Safety reports
+    #         expires: '2022-10-21' # datetime string - date this ignore will expire, best practice to use this variable
+    # continue-on-vulnerability-error: False # Suppress non-zero exit codes when vulnerabilities are found. Enable this in pipelines and CI/CD processes if you want to pass builds that have vulnerabilities
+
+    ignore-vulnerabilities:
+        70612:
+            reason: Vulnerability found in jinja2 version 3.1.4
+        64396:
+            reason: Vulnerability found in ecdsa version 0.19.0
+        64459:
+            reason: Vulnerability found in ecdsa version 0.19.0

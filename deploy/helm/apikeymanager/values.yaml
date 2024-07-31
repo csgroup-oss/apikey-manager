@@ -69,7 +69,7 @@ image:
   # -- Image repository
   repository: ghcr.io/csgroup-oss/apikey-manager
   # -- Image tag
-  tag: 0.1.dev0.g173becc
+  tag: 1.0.0
 
 imagePullSecrets:
   # -- Image pull secrets

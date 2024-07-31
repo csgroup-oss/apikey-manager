@@ -55,7 +55,10 @@ class ApiSettings(BaseSettings):
 
     # Random string used to encode cookie-based HTTP sessions in SessionMiddleware
     cookie_secret: str = "".join(
-        random.SystemRandom().choice(string.digits) for _ in range(30)
+        random.SystemRandom().choice(
+            string.ascii_lowercase + string.ascii_uppercase + string.digits
+        )
+        for _ in range(30)
     )
 
     # Rate limiter configuration for the check apikey endpoint: after too many requests,

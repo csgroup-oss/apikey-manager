@@ -66,14 +66,20 @@ class APIKeyCrud:
             meta,
             Column("api_key", String, primary_key=True, index=True),
             Column("name", String),
+            # User ID in keycloak
             Column("user_id", String, index=True, nullable=False),
+            Column("user_login", String),
+            # Is the user active in keycloak ? True by defulat, because
+            # to create an apikey, the user must be authenticated to keycloak.
+            Column("user_active", Boolean, default=True),
+            # Is the apikey active = not revoked manually ?
             Column("is_active", Boolean, default=True),
             Column("never_expire", Boolean, default=False),
             Column("expiration_date", DateTime),
             Column("latest_query_date", DateTime),
             Column("total_queries", Integer, default=0),
             Column("latest_sync_date", DateTime),
-            Column("iam_roles", JSON, default={}),
+            Column("iam_roles", JSON, default=[]),
             Column("config", JSON, default={}),
             Column("allowed_referers", JSON, default=None),
         )
@@ -89,6 +95,7 @@ class APIKeyCrud:
         self,
         name: str,
         user_id: str,
+        user_login: str,
         never_expire: bool,
         iam_roles: list[str],
         config: dict,
@@ -101,6 +108,7 @@ class APIKeyCrud:
                     api_key=self.__hash(api_key),
                     name=name,
                     user_id=user_id,
+                    user_login=user_login,
                     never_expire=never_expire,
                     expiration_date=datetime.now(UTC)
                     + timedelta(hours=settings.default_apikey_ttl_hour),
@@ -156,10 +164,19 @@ class APIKeyCrud:
                             Please use ISO 8601.",
                     ) from exc
 
+            LOGGER.debug("Sync user info of `user_id` with KeyCLoak")
+            kc_info = self.kcutil.get_user_info(user_id)
+
             conn.execute(
                 t.update()
                 .where(t.c.api_key == self.__hash(api_key))
-                .values(is_active=True, expiration_date=parsed_expiration_date)
+                .values(
+                    user_active=kc_info.is_enabled,
+                    iam_roles=kc_info.roles,
+                    latest_sync_date=datetime.now(UTC),
+                    is_active=True,
+                    expiration_date=parsed_expiration_date,
+                )
             )
 
             conn.commit()
@@ -202,6 +219,8 @@ class APIKeyCrud:
                 select(
                     t.c[
                         "user_id",
+                        "user_login",
+                        "user_active",
                         "is_active",
                         "iam_roles",
                         "config",
@@ -218,6 +237,12 @@ class APIKeyCrud:
                 return None
 
             response = row._asdict()
+
+            # If the apikey has been revoked manually, then it can
+            # only be renewed manually.
+            if not response["is_active"]:
+                return None
+
             latest_sync_date = response["latest_sync_date"]
             # SQLite does not store timezone. Small warkaround
             if latest_sync_date.utcoffset() is None:
@@ -233,17 +258,17 @@ class APIKeyCrud:
                     t.update()
                     .where(t.c.api_key == self.__hash(api_key))
                     .values(
-                        is_active=kc_info.is_enabled,
+                        user_active=kc_info.is_enabled,
                         iam_roles=kc_info.roles,
                         latest_sync_date=datetime.now(UTC),
                     )
                 )
                 conn.commit()
 
-                response["is_active"] = kc_info.is_enabled
+                response["user_active"] = kc_info.is_enabled
                 response["iam_roles"] = kc_info.roles
 
-            if not response["is_active"]:
+            if not response["user_active"]:
                 # If user is not active anymore
                 return None
 

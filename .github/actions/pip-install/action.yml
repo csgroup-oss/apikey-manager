@@ -15,14 +15,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ .Release.Name }}-auth
-data:
-  database_url: {{ .Values.config.database_url | b64enc }}
-  oidc_endpoint: {{ .Values.config.oidc_endpoint | b64enc }}
-  oidc_realm: {{ .Values.config.oidc_realm | b64enc }}
-  oidc_client_id: {{ .Values.config.oidc_client_id | b64enc }}
-  oidc_client_secret: {{ .Values.config.oidc_client_secret | b64enc }}
-  cookie_secret: {{ .Values.config.cookie_secret | b64enc }}
+name: pip-install
+description: "'pip install' this project and dependencies"
+
+inputs:
+  options:
+    description: "'pip install' <options> will run 'pip install -e .<options> --no-cache-dir'"
+    required: false
+    default: "[dev]"
+
+  working-directory:
+    description: "the working directory in which poetry is run."
+    required: false
+    default: .
+
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/install-python
+    - run: |
+        pip install -e .${{ inputs.options }} --no-cache-dir
+      working-directory: ${{ inputs.working-directory }}
+      shell: bash

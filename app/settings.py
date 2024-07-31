@@ -15,12 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
+import string
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+
+
+@dataclass
+class AuthInfo:
+    user_id: str
+    user_login: str
+    roles: list[str]
 
 
 class ApiSettings(BaseSettings):
@@ -33,21 +43,59 @@ class ApiSettings(BaseSettings):
     cors_allow_methods: str = "GET"
 
     database_url: str = "sqlite:///./test.db"
-    default_apikey_ttl_hour: int = 15 * 24  # in hour
-
-    oidc_endpoint: str = ""
-    oidc_realm: str = ""
-    oidc_client_id: str = ""
+    default_apikey_ttl_hour: int = 15 * 24  # in hours
 
     # Admin client id and secret used for oauth2 operations.
     # The client must have have the real_management/view_users
     # and "implicit" flow privileges.
-    #  -1 means no sync
-    keycloak_sync_freq: int = 5 * 60
+    oidc_endpoint: str = ""
+    oidc_realm: str = ""
+    oidc_client_id: str = ""
     oidc_client_secret: str = ""
+
+    # Random string used to encode cookie-based HTTP sessions in SessionMiddleware
+    cookie_secret: str = "".join(
+        random.SystemRandom().choice(
+            string.ascii_lowercase + string.ascii_uppercase + string.digits
+        )
+        for _ in range(30)
+    )
+
+    # Rate limiter configuration for the check apikey endpoint: after too many requests,
+    # the user will receive an error: 429 Too Many Requests
+    # This configuration can be e.g. "20/minute" or "100/hour" or "2000/day" ...
+    rate_limit: str = "20/minute"
+
+    # Time after which we refresh, in the database,
+    # the cached apikey information coming from keycloak.
+    # -1 means no sync.
+    keycloak_sync_freq: int = 5 * 60  # in seconds
 
     # Show endpoints in the openapi swagger ?
     show_technical_endpoints: bool = False
+
+    # If False (default): use the OpenIdConnect authentication.
+    # If True: use the authlib OAuth authentication instead.
+    use_authlib_oauth: bool = False
+
+    # Description displayed in the swagger front page
+    swagger_description: str = (
+        "APIKeyManager is a centralized Python-oriented API Key manager."
+    )
+
+    # Contact name displayed in the swagger front page
+    contact_name: str = "CS Group France"
+
+    # Contact url displayed in the swagger front page
+    contact_url: str = "https://github.com/csgroup-oss/apikey-manager/"
+
+    # Contact email displayed in the swagger front page
+    contact_email: str = "support@csgroup.space"
+
+    # By default, the openapi.json file is under /openapi.json
+    # If e.g. Ingress redirects the root domain URL to /docs, it also needs
+    # to have the openapi.json file under /docs/openapi.json
+    openapi_url: str = "/openapi.json"
 
     auth_function: Callable | None = None
 

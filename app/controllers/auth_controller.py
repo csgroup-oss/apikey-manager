@@ -17,7 +17,6 @@
 
 
 import logging
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Annotated
 
@@ -30,8 +29,9 @@ from pydantic import BaseModel, Json
 from pydantic.json_schema import SkipJsonSchema
 from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
 
+from ..auth import authlib_oauth
 from ..auth.apikey_crud import apikey_crud
-from ..settings import api_settings, rate_limiter
+from ..settings import AuthInfo, api_settings, rate_limiter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,48 +42,56 @@ LOGGER = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Use the OpenIdConnect authentication
+if not api_settings.use_authlib_oauth:
+    oidc = OpenIdConnect(openIdConnectUrl=api_settings.oidc_metadata_url)
 
-oidc = OpenIdConnect(openIdConnectUrl=api_settings.oidc_metadata_url)
+    public_key_cache: tuple[datetime, tuple[str, str]] | None = None
 
-public_key_cache: tuple[datetime, tuple[str, str]] | None = None
+    async def get_issuer_and_public_key() -> tuple[str, str]:
+        global public_key_cache
+
+        if not public_key_cache or public_key_cache[0] < datetime.now():
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_settings.oidc_metadata_url) as resp:
+                    issuer = (await resp.json()).get("issuer")
+                async with session.get(issuer) as resp:
+                    public_key = (await resp.json()).get("public_key")
+
+            key = (
+                "-----BEGIN PUBLIC KEY-----\n"
+                + public_key
+                + "\n-----END PUBLIC KEY-----"
+            )
+            public_key_cache = (datetime.now() + timedelta(days=1), (issuer, key))
+
+        return public_key_cache[1]
+
+    async def oidc_auth(token: str | None = Depends(oidc)) -> AuthInfo:
+        if not token:
+            raise HTTPException(
+                status_code=HTTP_403_FORBIDDEN, detail="Not authenticated"
+            )
+        try:
+            issuer, key = await get_issuer_and_public_key()
+            if token.startswith("Bearer "):
+                token = token[7:]  # remove the "Bearer " header
+
+            decoded = jwt.decode(
+                token, key=key, issuer=issuer, audience=api_settings.oidc_client_id
+            )
+            return AuthInfo(
+                decoded.get("sub"),
+                decoded.get("preferred_username"),
+                decoded.get("roles"),
+            )
+        except JOSEError as e:
+            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
 
 
-@dataclass
-class AuthInfo:
-    user_id: str
-    roles: list[str]
-
-
-async def get_issuer_and_public_key() -> tuple[str, str]:
-    global public_key_cache
-
-    if not public_key_cache or public_key_cache[0] < datetime.now():
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api_settings.oidc_metadata_url) as resp:
-                issuer = (await resp.json()).get("issuer")
-            async with session.get(issuer) as resp:
-                public_key = (await resp.json()).get("public_key")
-
-        key = "-----BEGIN PUBLIC KEY-----\n" + public_key + "\n-----END PUBLIC KEY-----"
-        public_key_cache = (datetime.now() + timedelta(days=1), (issuer, key))
-
-    return public_key_cache[1]
-
-
-async def oidc_auth(token: str | None = Depends(oidc)) -> AuthInfo:
-    if not token:
-        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Not authenticated")
-    try:
-        issuer, key = await get_issuer_and_public_key()
-        if token.startswith("Bearer "):
-            token = token[7:]  # remove the "Bearer " header
-
-        decoded = jwt.decode(
-            token, key=key, issuer=issuer, audience=api_settings.oidc_client_id
-        )
-        return AuthInfo(decoded.get("sub"), decoded.get("roles"))
-    except JOSEError as e:
-        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
+# Use the authlib OAuth authentication
+else:
+    oidc_auth = authlib_oauth.authlib_oauth  # type: ignore
 
 
 async def main_auth():
@@ -123,11 +131,15 @@ async def api_key_security(
 
 @router.get("/me")
 async def show_me(auth_info: Annotated[AuthInfo, Depends(oidc_auth)]):
-    return {"user_id": auth_info.user_id, "roles": auth_info.roles}
+    return {
+        "user_id": auth_info.user_id,
+        "user_login": auth_info.user_login,
+        "roles": auth_info.roles,
+    }
 
 
 @router.get("/api_key/new")
-def get_new_api_key(
+async def get_new_api_key(
     auth_info: Annotated[AuthInfo, Depends(oidc_auth)],
     name: Annotated[
         str,
@@ -138,9 +150,9 @@ def get_new_api_key(
     config: Annotated[
         Json,
         Query(
-            description="Allowed hosts that can use this API Key",
+            description="Free JSON object that can be used to configure services",
         ),
-    ],
+    ] = None,
     allowed_referers: Annotated[
         list[str] | SkipJsonSchema[None],
         Query(description="Allowed hosts that can use this API Key"),
@@ -159,9 +171,10 @@ def get_new_api_key(
     return apikey_crud.create_key(
         name,
         auth_info.user_id,
+        auth_info.user_login,
         never_expires,
         auth_info.roles,
-        config,
+        config or {},
         allowed_referers,
     )
 
@@ -202,6 +215,8 @@ async def renew_api_key(
 class UsageLog(BaseModel):
     api_key: str | None = None
     name: str
+    user_login: str
+    user_active: bool
     is_active: bool
     never_expire: bool
     expiration_date: datetime
@@ -230,15 +245,17 @@ def get_api_key_usage_logs(
         UsageLog(
             api_key=row[0],
             name=row[1],
-            is_active=row[3],
-            never_expire=row[4],
-            expiration_date=row[5],
-            latest_query_date=row[6],
-            total_queries=row[7],
-            latest_sync_date=row[8],
-            iam_roles=row[9],
-            config=row[10],
-            allowed_referers=row[11],
+            user_login=row[3],
+            user_active=row[4],
+            is_active=row[5],
+            never_expire=row[6],
+            expiration_date=row[7],
+            latest_query_date=row[8],
+            total_queries=row[9],
+            latest_sync_date=row[10],
+            iam_roles=row[11],
+            config=row[12],
+            allowed_referers=row[13],
         )
         for row in apikey_crud.get_usage_stats(auth_info.user_id)
     ]
@@ -246,12 +263,27 @@ def get_api_key_usage_logs(
 
 class CheckKey(BaseModel):
     user_id: str
+    user_login: str
     iam_roles: list | None
     config: dict | None
 
 
-@router.get("/check_key", response_model=CheckKey)
-@rate_limiter.limit("20/minute")
+def custom_rate_limiter(func):
+    """Customize the rate_limiter depending on our configuration."""
+    # If the env variable is not defined, don't use a rate limiter
+    if not api_settings.rate_limit:
+        return func
+    # Else return the check_api_key function decorated with
+    # the rate_limiter configured with our setting
+    return rate_limiter.limit(api_settings.rate_limit)(func)
+
+
+@router.get(
+    "/check_key",
+    response_model=CheckKey,
+    include_in_schema=api_settings.show_technical_endpoints,
+)
+@custom_rate_limiter
 async def check_api_key(
     request: Request,  # needed by the rate limiter
     query_param: Annotated[str, Security(api_key_query)],

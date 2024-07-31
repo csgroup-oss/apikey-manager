@@ -40,6 +40,9 @@ class RequiresLoginException(Exception):
 async def is_logged_in(request: Request) -> bool:
     return "user" in request.session
 
+async def console_logged_message() -> HTMLResponse:
+    return HTMLResponse("You are logged in.")
+
 async def login(request: Request):
     """
     Override the Swagger /docs endpoint so the user must login with keycloak
@@ -52,7 +55,7 @@ async def login(request: Request):
     if await is_logged_in(request):
 
         if called_from_console:
-            return HTMLResponse("You are logged in.")
+            return await console_logged_message()
     
         # If the login endpoint was called from the browser, redirect to the Swagger UI
         if calling_endpoint.path.rstrip("/") == "/login_from_browser":
@@ -137,6 +140,10 @@ def init(app: FastAPI) -> APIRouter:
     @app.exception_handler(RequiresLoginException)
     async def exception_handler(request: Request, exc: RequiresLoginException) -> Response:
         return await login(request)
+    
+    @router.get("/console_logged_message")
+    async def console_logged_message_() -> HTMLResponse:
+        return await console_logged_message()
 
     @router.get("/logout")
     async def logout(request: Request):

@@ -278,7 +278,11 @@ def custom_rate_limiter(func):
     return rate_limiter.limit(api_settings.rate_limit)(func)
 
 
-@router.get("/check_key", response_model=CheckKey)
+@router.get(
+    "/check_key",
+    response_model=CheckKey,
+    include_in_schema=api_settings.show_technical_endpoints,
+)
 @custom_rate_limiter
 async def check_api_key(
     request: Request,  # needed by the rate limiter

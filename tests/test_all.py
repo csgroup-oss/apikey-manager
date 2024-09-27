@@ -227,7 +227,7 @@ def test_new_apikey(
             == usage_logs[0]["api_key"]
         )
 
-        # Expected result of the check/api_key endpoint
+        # Expected result of the auth/check_key endpoint
         expected_check = {
             "user_id": user_id,
             "user_login": user_login,

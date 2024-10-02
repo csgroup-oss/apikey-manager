@@ -82,7 +82,7 @@ You also need to assign the role "**realm-management** view-users" to the client
 
 ### Realm roles
 
-The API Key Manager relies on the realm roles.
+The API Key Manager relies on the **realm roles**.
 
 ## Developement
 

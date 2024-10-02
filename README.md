@@ -71,6 +71,19 @@ uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_conf
 
 ![Endpoints](docs/Endpoints.png)
 
+### Keycloak
+
+### Client configuration
+
+The keycloak client can be configured with the follow capabilities :
+![Capabilities](docs/ClientCapabilities.png)
+
+You also need to assign the role "**realm-management** view-users" to the client from its `Service accounts roles` tab.
+
+### Realm roles
+
+The API Key Manager relies on the realm roles.
+
 ## Developement
 
 ### Install development environment

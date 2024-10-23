@@ -21,10 +21,10 @@ from datetime import datetime, timedelta
 from typing import Annotated
 
 import aiohttp
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security
 from fastapi.security import APIKeyHeader, APIKeyQuery, OpenIdConnect
-from jose import jwt
-from jose.exceptions import JOSEError
+from jwt.exceptions import PyJWTError
 from pydantic import BaseModel, Json
 from pydantic.json_schema import SkipJsonSchema
 from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
@@ -78,14 +78,18 @@ if not api_settings.use_authlib_oauth:
                 token = token[7:]  # remove the "Bearer " header
 
             decoded = jwt.decode(
-                token, key=key, issuer=issuer, audience=api_settings.oidc_client_id
+                token,
+                key=key,
+                issuer=issuer,
+                audience=api_settings.oidc_client_id,
+                algorithms=["RS256"],
             )
             return AuthInfo(
                 decoded.get("sub"),
                 decoded.get("preferred_username"),
                 decoded.get("roles"),
             )
-        except JOSEError as e:
+        except PyJWTError as e:
             raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
 
 

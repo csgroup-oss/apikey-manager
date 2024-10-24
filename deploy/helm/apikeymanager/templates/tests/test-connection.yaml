@@ -28,5 +28,5 @@ spec:
     - name: wget
       image: busybox
       command: ['wget']
-      args: ['{{ include "apikeymanager.fullname" . }}:{{ .Values.service.port }}']
+      args: ['{{ include "apikeymanager.fullname" . }}:{{ .Values.service.port }}{{ .Values.config.openapi_url }}']
   restartPolicy: Never

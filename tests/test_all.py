@@ -22,6 +22,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import json
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -119,19 +120,20 @@ def mock_keycloak_info(
     user_id: str,
     user_login: str,
     iam_roles: list[str],
+    attributes: dict[str,Any],
     enabled_in_keycloak: bool = True,
 ):
     """Mock the user info returned from keycloak."""
 
     # Mock the AuthInfo instance returned by OpenIdConnect
     fastapi_app.dependency_overrides[oidc_auth] = lambda: AuthInfo(
-        user_id, user_login, iam_roles
+        user_id, user_login, iam_roles, attributes
     )
 
     # Mock the KCInfo instance returned by keycloak.KeycloakAdmin
     mocker.patch(
         "app.auth.keycloak_util.KCUtil.get_user_info",
-        return_value=KCInfo(enabled_in_keycloak, iam_roles),
+        return_value=KCInfo(enabled_in_keycloak, iam_roles, attributes),
     )
 
 
@@ -144,12 +146,16 @@ def mock_keycloak_info(
 USER_ID1 = "user_id1"
 USER_LOGIN1 = "user_login1"
 IAM_ROLES1 = ["role1", "role2", "role3"]
-CONFIG1 = {}  # TODO test with values, I have error with e.g. {"my": "config"}
+ # Attributes read from oauth2
+OAUTH2_ATTRIBUTES1 = {"oauth2_attr": "value_from_oauth_1", "common_attr": "value_from_oauth_2"}
+# Custom attributes given manually by the user
+CUSTOM_CONFIG1 = {"custom_attr": "value_from_user_1", "common_attr": "value_from_user_2"} 
 
 USER_ID2 = "user_id2"
 USER_LOGIN2 = "user_login2"
 IAM_ROLES2 = ["role4", "role5"]
-CONFIG2 = {}  # TODO test with values
+OAUTH2_ATTRIBUTES2 = {"oauth2_attr": "value_from_oauth_10", "common_attr": "value_from_oauth_20"}
+CUSTOM_CONFIG2 = {"custom_attr": "value_from_user_10", "common_attr": "value_from_user_20"} 
 
 WRONG_APIKEY = "wrong_apikey"
 WRONG_APIKEY_MESSAGE = "Wrong, revoked, or expired API key."
@@ -200,16 +206,16 @@ def test_new_apikey(
     """Create a new API key then check its validity."""
 
     # For each user
-    for user_id, user_login, iam_roles, config in [
-        [USER_ID1, USER_LOGIN1, IAM_ROLES1, CONFIG1],
-        [USER_ID2, USER_LOGIN2, IAM_ROLES2, CONFIG2],
+    for user_id, user_login, iam_roles, oauth2_attributes, custom_config in [
+        [USER_ID1, USER_LOGIN1, IAM_ROLES1, OAUTH2_ATTRIBUTES1, CUSTOM_CONFIG1],
+        [USER_ID2, USER_LOGIN2, IAM_ROLES2, OAUTH2_ATTRIBUTES2, CUSTOM_CONFIG2],
     ]:
         # Mock the user info returned from keycloak
-        mock_keycloak_info(mocker, fastapi_app, user_id, user_login, iam_roles)
+        mock_keycloak_info(mocker, fastapi_app, user_id, user_login, iam_roles, oauth2_attributes)
 
         # Create a new API key
         response = client.get(
-            "/auth/api_key/new", params={"name": "any name", "config": config}
+            "/auth/api_key/new", params={"name": "any name", "config": json.dumps(custom_config)}
         )
         response.raise_for_status()
         apikey_value = response.json()
@@ -232,7 +238,8 @@ def test_new_apikey(
             "user_id": user_id,
             "user_login": user_login,
             "iam_roles": iam_roles,
-            "config": config,
+            # NOTE: priority order is user-config < oauth2 attributes
+            "config": custom_config | oauth2_attributes, 
         }
 
         # Check the apikey validity by passing it as http header, url query or url body.
@@ -256,7 +263,7 @@ def test_new_apikey(
 
         # Create a new API key, check that we now have two
         response = client.get(
-            "/auth/api_key/new", params={"name": "any other name", "config": config}
+            "/auth/api_key/new", params={"name": "any other name", "config": json.dumps(custom_config)}
         )
         response.raise_for_status()
         response = client.get("/auth/api_key/list")
@@ -273,11 +280,11 @@ def test_revoke_renew(mocker, fastapi_app, client):
     check_endpoint = CHECK_APIKEY_ENDPOINTS[0]
 
     # Mock the user info returned from keycloak
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1, OAUTH2_ATTRIBUTES1)
 
     # Create a new API key
     response = client.get(
-        "/auth/api_key/new", params={"name": "any name", "config": CONFIG1}
+        "/auth/api_key/new", params={"name": "any name", "config": json.dumps(CUSTOM_CONFIG1)}
     )
     response.raise_for_status()
     apikey_value = response.json()
@@ -290,7 +297,7 @@ def test_revoke_renew(mocker, fastapi_app, client):
     assert check_endpoint(client, apikey_value).status_code == HTTP_403_FORBIDDEN
 
     # In the meantime, if the user information changes in keycloak, the apikey should be updatd
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES2)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES2, OAUTH2_ATTRIBUTES2)
 
     # Renew it
     response = client.get("/auth/api_key/renew", params={"api-key": apikey_value})
@@ -299,7 +306,10 @@ def test_revoke_renew(mocker, fastapi_app, client):
     # We should now be authorized. Check the user info.
     response = check_endpoint(client, apikey_value)
     response.raise_for_status()
-    assert response.json()["iam_roles"] == IAM_ROLES2
+    user_info = response.json()
+    assert user_info["iam_roles"] == IAM_ROLES2
+    # NOTE: priority order is user-config < old oauth2 attributes < new oauth2 attributes
+    assert user_info["config"] == (CUSTOM_CONFIG1 | OAUTH2_ATTRIBUTES1 | OAUTH2_ATTRIBUTES2)
 
 
 def test_expired_renew(mocker, fastapi_app, client):
@@ -309,11 +319,11 @@ def test_expired_renew(mocker, fastapi_app, client):
     check_endpoint = CHECK_APIKEY_ENDPOINTS[0]
 
     # Mock the user info returned from keycloak
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1, OAUTH2_ATTRIBUTES1)
 
     # Create a new API key
     response = client.get(
-        "/auth/api_key/new", params={"name": "any name", "config": CONFIG1}
+        "/auth/api_key/new", params={"name": "any name", "config": json.dumps(CUSTOM_CONFIG1)}
     )
     response.raise_for_status()
     apikey_value = response.json()
@@ -332,7 +342,7 @@ def test_expired_renew(mocker, fastapi_app, client):
     assert check_endpoint(client, apikey_value).status_code == HTTP_403_FORBIDDEN
 
     # In the meantime, if the user information changes in keycloak, the apikey should be updatd
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES2)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES2, OAUTH2_ATTRIBUTES2)
 
     # Renew it with a date in the future
     response = client.get(
@@ -347,7 +357,10 @@ def test_expired_renew(mocker, fastapi_app, client):
     # We should now be authorized. Check the user info.
     response = check_endpoint(client, apikey_value)
     response.raise_for_status()
-    assert response.json()["iam_roles"] == IAM_ROLES2
+    user_info = response.json()
+    assert user_info["iam_roles"] == IAM_ROLES2
+    # NOTE: priority order is user-config < old oauth2 attributes < new oauth2 attributes
+    assert user_info["config"] == (CUSTOM_CONFIG1 | OAUTH2_ATTRIBUTES1 | OAUTH2_ATTRIBUTES2)
 
 
 @pytest.mark.parametrize(
@@ -363,11 +376,11 @@ def test_brute_force(mocker, fastapi_app, client, check_endpoint):
     ncalls = 20
 
     # Mock the user info returned from keycloak
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1, OAUTH2_ATTRIBUTES1)
 
     # Create a new API key
     response = client.get(
-        "/auth/api_key/new", params={"name": "any name", "config": CONFIG1}
+        "/auth/api_key/new", params={"name": "any name", "config": json.dumps(CUSTOM_CONFIG1)}
     )
     response.raise_for_status()
     apikey_value = response.json()
@@ -398,11 +411,11 @@ def test_cache(mocker, fastapi_app, client, check_endpoint):
     time_to_sleep = 0.51
 
     # Mock the user info returned from keycloak
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1, OAUTH2_ATTRIBUTES1)
 
     # Create a new API key
     response = client.get(
-        "/auth/api_key/new", params={"name": "any name", "config": CONFIG1}
+        "/auth/api_key/new", params={"name": "any name", "config": json.dumps(CUSTOM_CONFIG1)}
     )
     response.raise_for_status()
     apikey_value = response.json()
@@ -411,21 +424,29 @@ def test_cache(mocker, fastapi_app, client, check_endpoint):
     # the same as the user roles in keycloak
     response = check_endpoint(client, apikey_value)
     response.raise_for_status()
-    assert response.json()["iam_roles"] == IAM_ROLES1
+    user_info = response.json()
+    assert user_info["iam_roles"] == IAM_ROLES1
+    # NOTE: priority order is user-config < oauth2 attributes
+    assert user_info["config"] == (CUSTOM_CONFIG1 | OAUTH2_ATTRIBUTES1)
 
     # Mock the user info returned from keycloak
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES2)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES2, OAUTH2_ATTRIBUTES2)
 
     # If we call the check api endpoint again, we don't see the change immediately
     response = check_endpoint(client, apikey_value)
     response.raise_for_status()
-    assert response.json()["iam_roles"] == IAM_ROLES1
+    cached_user_info = response.json()
+    assert cached_user_info["iam_roles"] == IAM_ROLES1
+    assert cached_user_info["config"] == (CUSTOM_CONFIG1 | OAUTH2_ATTRIBUTES1)
 
     # But after some time, the endpoint refreshes the user info from keycloak and we can see the change
     time.sleep(time_to_sleep)
     response = check_endpoint(client, apikey_value)
     response.raise_for_status()
-    assert response.json()["iam_roles"] == IAM_ROLES2
+    new_user_info = response.json()
+    assert new_user_info["iam_roles"] == IAM_ROLES2
+    # NOTE: priority order is user-config < old oauth2 attributes < new oauth2 attributes
+    assert new_user_info["config"] == (CUSTOM_CONFIG1 | OAUTH2_ATTRIBUTES1 | OAUTH2_ATTRIBUTES2)
 
 
 # We want to check what happens when a user is disabled/enabled in keycloak,
@@ -481,11 +502,11 @@ def test_state_changes(
     check_endpoint = CHECK_APIKEY_ENDPOINTS[0]
 
     # Mock the user info returned from keycloak, at first he's always enabled
-    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1, True)
+    mock_keycloak_info(mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1, OAUTH2_ATTRIBUTES1, True)
 
     # Create a new API key
     response = client.get(
-        "/auth/api_key/new", params={"name": "any name", "config": CONFIG1}
+        "/auth/api_key/new", params={"name": "any name", "config": json.dumps(CUSTOM_CONFIG1)}
     )
     response.raise_for_status()
     apikey_value = response.json()
@@ -512,7 +533,7 @@ def test_state_changes(
         # Mock the user info returned from keycloak to enabled/disable the user
         if switch_user_ok:
             mock_keycloak_info(
-                mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1, user_ok
+                mocker, fastapi_app, USER_ID1, USER_LOGIN1, IAM_ROLES1, OAUTH2_ATTRIBUTES1, user_ok
             )
 
         # If we switch the revoke or expired status: update the database fields as if we
@@ -565,6 +586,9 @@ def test_state_changes(
             # the apikey is active and non-expired.
             if user_ok and (not revoked) and (not expired):
                 assert response.status_code == HTTP_200_OK
-                assert response.json()["iam_roles"] == IAM_ROLES1
+                user_info = response.json()
+                assert user_info["iam_roles"] == IAM_ROLES1
+                # NOTE: priority order is user-config < oauth2 attributes
+                assert user_info["config"] == (CUSTOM_CONFIG1 | OAUTH2_ATTRIBUTES1)
             else:
                 assert response.status_code == HTTP_403_FORBIDDEN

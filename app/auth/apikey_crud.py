@@ -262,7 +262,8 @@ class APIKeyCrud:
                 LOGGER.debug(f"Sync user info of `{response['user_id']}` with KeyCLoak")
                 kc_info = self.kcutil.get_user_info(response["user_id"])
 
-                # Merge the old config with the new valuesread from the oauth2 attributes.
+                # Merge the old config with the new valuesread from the oauth2
+                # attributes.
                 # NOTE: the new values have higher priority than the old config.
                 new_config = response["config"] | kc_info.attributes
 

@@ -116,8 +116,9 @@ class ApiSettings(BaseSettings):
 
     auth_function: Callable | None = None
 
-    # List of optional OAuth2 attributes to save as key/values in the API key "config" dict. The list is given as a
-    # comma-separated str (e.g. 'attr1,attr2') or json representation str (e.g. '["attr1", "attr2"]')
+    # List of optional OAuth2 attributes to save as key/values in the API key "config"
+    # dict. The list is given as a comma-separated str (e.g. 'attr1,attr2') or json
+    # representation str (e.g. '["attr1", "attr2"]')
     oauth2_attributes: Annotated[
         Sequence[str], BeforeValidator(str_to_list), NoDecode
     ] = []

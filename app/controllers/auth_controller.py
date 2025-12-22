@@ -178,7 +178,8 @@ async def get_new_api_key(
         api_key: a newly generated API key
     """
     # Merge the config given by the caller with the oauth2 attributes.
-    # NOTE: the values read from oauth2 have higher priority than those given by the caller.
+    # NOTE: the values read from oauth2 have higher priority than those
+    # given by the caller.
     config = (config or {}) | auth_info.attributes
 
     return apikey_crud.create_key(

@@ -35,6 +35,7 @@ Helm chart for APIKeyManager
 | config.show_technical_endpoints | bool | `false` | Show technical endoints (health) |
 | config.swagger_description | string | `"APIKeyManager is a centralized Python-oriented API Key manager."` | Description displayed in the swagger front page |
 | config.use_authlib_oauth | bool | `false` | If False (default): use the OpenIdConnect authentication. If True: use the authlib OAuth authentication instead. |
+| config.oauth2_attributes | string | `""` | List of optional OAuth2 attributes to save as key/values in the API key "config" dict. The list is given as a comma-separated str (e.g. `'attr1,attr2'`) or json representation str (e.g. `'["attr1", "attr2"]')` |
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.repository | string | `"ghcr.io/csgroup-oss/apikey-manager"` | Image repository |

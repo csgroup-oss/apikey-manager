@@ -18,6 +18,7 @@
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from keycloak import KeycloakAdmin, KeycloakError, KeycloakOpenIDConnection
 from keycloak.exceptions import KeycloakGetError
@@ -31,6 +32,7 @@ LOGGER = logging.getLogger(__name__)
 class KCInfo:
     is_enabled: bool
     roles: list[str]
+    attributes: dict[str, Any]
 
 
 class KCUtil:
@@ -66,7 +68,11 @@ class KCUtil:
             iam_roles = [
                 role["name"] for role in kadm.get_composite_realm_roles_of_user(user_id)
             ]
-            return KCInfo(user["enabled"], iam_roles)
+            user_attributes = {
+                attr: user.get("attributes", {}).get(attr)
+                for attr in settings.oauth2_attributes
+            }
+            return KCInfo(user["enabled"], iam_roles, user_attributes)
         except KeycloakGetError as error:
             # If the user is not found, this means he was removed from keycloak.
             # Thus we must remove all his api keys from the database.
@@ -74,6 +80,6 @@ class KCUtil:
                 "User not found" in error.response_body.decode("utf-8")
             ):
                 LOGGER.warning(f"User '{user_id}' not found in keycloak.")
-                return KCInfo(False, [])
+                return KCInfo(False, [], {})
 
             raise

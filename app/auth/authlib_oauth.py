@@ -132,7 +132,7 @@ async def authlib_oauth(request: Request) -> AuthInfo:
     user_info = kcutil.get_user_info(user_id)
 
     if user_info.is_enabled:
-        return AuthInfo(user_id, user_login, user_info.roles)
+        return AuthInfo(user_id, user_login, user_info.roles, user_info.attributes)
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

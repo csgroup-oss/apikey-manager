@@ -15,13 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import random
 import string
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Annotated, Any
 
-from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BeforeValidator, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -31,6 +33,21 @@ class AuthInfo:
     user_id: str
     user_login: str
     roles: list[str]
+    attributes: dict[str, Any]
+
+
+def str_to_list(value: Any) -> list:
+    """
+    Convert into a list a comma-separated str (e.g. 'attr1,attr2') or
+    json representation str (e.g. '["attr1", "attr2"]')
+    """
+    if isinstance(value, str):
+        if value.startswith("["):
+            return json.loads(value)
+        else:
+            return [v.strip() for v in value.split(",")]
+    else:
+        return value
 
 
 class ApiSettings(BaseSettings):
@@ -98,6 +115,12 @@ class ApiSettings(BaseSettings):
     openapi_url: str = "/openapi.json"
 
     auth_function: Callable | None = None
+
+    # List of optional OAuth2 attributes to save as key/values in the API key "config" dict. The list is given as a
+    # comma-separated str (e.g. 'attr1,attr2') or json representation str (e.g. '["attr1", "attr2"]')
+    oauth2_attributes: Annotated[
+        Sequence[str], BeforeValidator(str_to_list), NoDecode
+    ] = []
 
     model_config = SettingsConfigDict(env_prefix="APIKM_", env_file=".env")
 

@@ -84,10 +84,14 @@ if not api_settings.use_authlib_oauth:
                 audience=api_settings.oidc_client_id,
                 algorithms=["RS256"],
             )
+            user_attributes = {
+                attr: decoded.get(attr) for attr in api_settings.oauth2_attributes
+            }
             return AuthInfo(
                 decoded.get("sub"),
                 decoded.get("preferred_username"),
                 decoded.get("roles"),
+                user_attributes,
             )
         except PyJWTError as e:
             raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
@@ -139,6 +143,7 @@ async def show_me(auth_info: Annotated[AuthInfo, Depends(oidc_auth)]):
         "user_id": auth_info.user_id,
         "user_login": auth_info.user_login,
         "roles": auth_info.roles,
+        "attributes": auth_info.attributes,
     }
 
 
@@ -172,13 +177,17 @@ async def get_new_api_key(
     Returns:
         api_key: a newly generated API key
     """
+    # Merge the config given by the caller with the oauth2 attributes.
+    # NOTE: the values read from oauth2 have higher priority than those given by the caller.
+    config = (config or {}) | auth_info.attributes
+
     return apikey_crud.create_key(
         name,
         auth_info.user_id,
         auth_info.user_login,
         never_expires,
         auth_info.roles,
-        config or {},
+        config,
         allowed_referers,
     )
 

@@ -106,6 +106,8 @@ spec:
               value: {{  .Values.config.contact_email | quote }}
             - name: "APIKM_OPENAPI_URL"
               value: {{  .Values.config.openapi_url | quote }}
+            - name: "APIKM_OAUTH2_ATTRIBUTES"
+              value: {{  .Values.config.oauth2_attributes | quote }}
           {{- range $key, $val := .Values.env }}
             - name: {{ $key }}
               value: {{ $val | quote }}

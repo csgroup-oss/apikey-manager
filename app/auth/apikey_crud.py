@@ -128,7 +128,7 @@ class APIKeyCrud:
         with self.engine.connect() as conn:
             t = self.t_apitoken
             resp = conn.execute(
-                select(t.c["is_active", "expiration_date"]).where(
+                select(t.c["is_active", "config"]).where(
                     (t.c.api_key == self.__hash(api_key)) & (t.c.user_id == user_id)
                 )
             ).first()
@@ -139,10 +139,12 @@ class APIKeyCrud:
                     status_code=HTTP_404_NOT_FOUND, detail="API key not found"
                 )
 
+            old_active = resp[0]
+            old_config = resp[1]
             response_lines = []
 
             # Previously revoked key. Issue a text warning and reactivate it.
-            if not resp[0]:
+            if not old_active:
                 response_lines.append(
                     "This API key was revoked and has been reactivated."
                 )
@@ -167,6 +169,10 @@ class APIKeyCrud:
             LOGGER.debug("Sync user info of `user_id` with KeyCLoak")
             kc_info = self.kcutil.get_user_info(user_id)
 
+            # Merge the old config with the new valuesread from the oauth2 attributes.
+            # NOTE: the new values have higher priority than the old config.
+            new_config = old_config | kc_info.attributes
+
             conn.execute(
                 t.update()
                 .where(t.c.api_key == self.__hash(api_key))
@@ -176,6 +182,7 @@ class APIKeyCrud:
                     latest_sync_date=datetime.now(UTC),
                     is_active=True,
                     expiration_date=parsed_expiration_date,
+                    config=new_config,
                 )
             )
 
@@ -248,11 +255,18 @@ class APIKeyCrud:
             if latest_sync_date.utcoffset() is None:
                 latest_sync_date = latest_sync_date.replace(tzinfo=timezone.utc)
 
+            # If the apikey info has not been updated from keycloak for a long time
             if settings.keycloak_sync_freq > 0 and datetime.now(UTC) > (
                 latest_sync_date + timedelta(seconds=settings.keycloak_sync_freq)
             ):
                 LOGGER.debug(f"Sync user info of `{response['user_id']}` with KeyCLoak")
                 kc_info = self.kcutil.get_user_info(response["user_id"])
+
+                # Merge the old config with the new valuesread from the oauth2
+                # attributes.
+                # NOTE: the new values have higher priority than the old config.
+                new_config = response["config"] | kc_info.attributes
+
                 # Update the database
                 conn.execute(
                     t.update()
@@ -261,12 +275,14 @@ class APIKeyCrud:
                         user_active=kc_info.is_enabled,
                         iam_roles=kc_info.roles,
                         latest_sync_date=datetime.now(UTC),
+                        config=new_config,
                     )
                 )
                 conn.commit()
 
                 response["user_active"] = kc_info.is_enabled
                 response["iam_roles"] = kc_info.roles
+                response["config"] = new_config
 
             if not response["user_active"]:
                 # If user is not active anymore

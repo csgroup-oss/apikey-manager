@@ -1,6 +1,6 @@
 # apikeymanager
 
-![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.0.0](https://img.shields.io/badge/AppVersion-1.0.0-informational?style=flat-square)
+![Version: 0.1.0-dev0.g3df33f1ac](https://img.shields.io/badge/Version-0.1.0--dev0.g3df33f1ac-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.0-dev0.g3df33f1ac](https://img.shields.io/badge/AppVersion-0.1.0--dev0.g3df33f1ac-informational?style=flat-square)
 
 Helm chart for APIKeyManager
 
@@ -25,6 +25,7 @@ Helm chart for APIKeyManager
 | config.debug | bool | `false` | DEBUG mode (display SQL queries) |
 | config.default_apikey_ttl_hour | int | `360` | Default lifetime of an API Key (in hour) |
 | config.keycloak_sync_freq | int | `300` | Sync frequency of a user with data stored in Keycloak (in seconds) |
+| config.oauth2_attributes | string | `""` | OAuth2 attributes to save as key/values in the API key "config" dict |
 | config.oidc_client_id | string | `""` | OIDC CLient ID |
 | config.oidc_client_secret | string | `""` | OIDC Secret used to sync user info from Keycloak |
 | config.oidc_endpoint | string | `""` | OIDC End Point |
@@ -38,7 +39,7 @@ Helm chart for APIKeyManager
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.repository | string | `"ghcr.io/csgroup-oss/apikey-manager"` | Image repository |
-| image.tag | string | `"1.0.0"` | Image tag |
+| image.tag | string | `"0.1.dev0.g3df33f1ac"` | Image tag |
 | imagePullSecrets[0] | object | `{"name":"ghcr-k8s"}` | Image pull secrets |
 | ingress.annotations | object | `{}` |  |
 | ingress.className | string | `""` |  |

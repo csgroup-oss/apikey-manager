@@ -66,6 +66,7 @@ uvicorn app.main:app --host localhost --port 9999 --reload --log-config=log_conf
 | APIKM_CONTACT_URL              | Contact url displayed in the swagger front page                                                           | `"https://github.com/csgroup-oss/apikey-manager/"`                 |
 | APIKM_CONTACT_EMAIL            | Contact email displayed in the swagger front page                                                         | `"support@csgroup.space"`                                          |
 | APIKM_OPENAPI_URL              | The URL where the OpenAPI schema will be served from                                                      | `"/openapi.json"`                                                  |
+| APIKM_OAUTH2_ATTRIBUTES        | OAuth2 attributes to save as key/values in the API key "config" dict                                      | `"attr1,attr2"`                                                    |
 
 ### Endpoints
 
